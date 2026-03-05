@@ -12,6 +12,8 @@ const Checkout = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
   const [shippingDetails, setShippingDetails] = useState(() => {
     const savedAddress = localStorage.getItem("userAddress");
     const parsedAddress = savedAddress ? JSON.parse(savedAddress) : null;
@@ -111,7 +113,7 @@ Please confirm this order and provide payment details (UPI/QR). Thank you!`;
         totalAmount: total,
       };
 
-      const response = await fetch("http://localhost:5000/api/orders", {
+      const response = await fetch(`${API_URL}/api/orders`, {
         method: "POST",
         headers,
         body: JSON.stringify(orderData),

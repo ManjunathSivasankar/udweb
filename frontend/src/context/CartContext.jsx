@@ -6,7 +6,8 @@ const CartContext = createContext();
 export const useCart = () => useContext(CartContext);
 
 // Change this to your backend URL once deployed
-const API_URL = "http://localhost:5000/api";
+const API_URL =
+  (import.meta.env.VITE_API_URL || "http://localhost:5000") + "/api";
 
 export const CartProvider = ({ children }) => {
   const { user } = useAuth();
@@ -37,9 +38,7 @@ export const CartProvider = ({ children }) => {
     };
 
     setCart((prev) => {
-      const existing = prev.find(
-        (item) => item.CartId === newItem.CartId,
-      );
+      const existing = prev.find((item) => item.CartId === newItem.CartId);
       let updated;
       if (existing) {
         updated = prev.map((item) =>
@@ -98,7 +97,5 @@ export const CartProvider = ({ children }) => {
     loading,
   };
 
-  return (
-    <CartContext.Provider value={value}>{children}</CartContext.Provider>
-  );
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
