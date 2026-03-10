@@ -1,54 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
-import {
-  ArrowRight,
-  Instagram,
-  Facebook,
-  Linkedin,
-  Star,
-  Quote,
-} from "lucide-react";
+import { ArrowRight, Instagram, Youtube } from "lucide-react";
 
 // Hardcoded testimonials removed, moving to dynamic fetch
 
 import { useCollection } from "../context/CollectionContext";
 
 const Hero = () => {
-  const [currentTestimonial, setCurrentTestimonial] = useState(0);
-  const [testimonials, setTestimonials] = useState([]);
   const { collections } = useCollection();
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-  // Fetch Testimonials
-  useEffect(() => {
-    const fetchTestimonials = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/testimonials`);
-        if (res.ok) {
-          const data = await res.json();
-          setTestimonials(Array.isArray(data) && data.length > 0 ? data : []);
-        }
-      } catch (err) {
-        console.error("Failed to fetch testimonials", err);
-      }
-    };
-    fetchTestimonials();
-  }, [API_URL]);
-
   // Create a looped array of whatever collections we have from backend
   const marqueeItems =
     collections?.length > 0 ? [...collections, ...collections] : [];
-
-  // Auto-rotate testimonials
-  useEffect(() => {
-    if (testimonials.length === 0) return;
-    const timer = setInterval(() => {
-      setCurrentTestimonial((prev) => (prev + 1) % testimonials.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [testimonials]);
 
   return (
     <div className="relative min-h-screen w-full bg-primary font-sans overflow-hidden flex flex-col justify-center pt-24 pb-12">
@@ -102,25 +68,22 @@ const Hero = () => {
       <div className="absolute left-6 top-1/2 transform -translate-y-1/2 flex flex-col items-center space-y-6 z-30 hidden md:flex">
         <div className="w-[1px] h-20 bg-white/20 mb-2"></div>
         <a
-          href="#"
-          className="p-3 bg-white/5 rounded-full text-white/70 hover:text-white hover:bg-white/10 hover:scale-110 transition-all duration-300 hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] outline-none"
+          href="https://www.instagram.com/urban.dos/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-3 bg-white/10 rounded-full text-white hover:text-white hover:bg-white/20 hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] outline-none"
           aria-label="Instagram"
         >
           <Instagram size={18} />
         </a>
         <a
-          href="#"
-          className="p-3 bg-white/5 rounded-full text-white/70 hover:text-white hover:bg-white/10 hover:scale-110 transition-all duration-300 hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] outline-none"
-          aria-label="Facebook"
+          href="https://www.youtube.com/@urbandos7"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-3 bg-white/10 rounded-full text-white hover:text-white hover:bg-white/20 hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] outline-none"
+          aria-label="Youtube"
         >
-          <Facebook size={18} />
-        </a>
-        <a
-          href="#"
-          className="p-3 bg-white/5 rounded-full text-white/70 hover:text-white hover:bg-white/10 hover:scale-110 transition-all duration-300 hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] outline-none"
-          aria-label="Linkedin"
-        >
-          <Linkedin size={18} />
+          <Youtube size={18} />
         </a>
         <div className="w-[1px] h-20 bg-white/20 mt-2"></div>
       </div>
@@ -220,57 +183,6 @@ const Hero = () => {
           ) : null}
         </div>
       </div>
-
-      {/* 3. Bottom Right Testimonials */}
-      {testimonials.length > 0 && (
-        <div className="absolute right-6 bottom-6 z-30 w-[300px] md:w-[350px] hidden sm:block">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-            className="bg-primary/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative overflow-hidden group hover:border-white/20 transition-colors"
-          >
-            {/* Ambient inner glow */}
-            <div className="absolute -inset-1 bg-gradient-to-r from-white/0 via-white/5 to-white/0 opacity-0 group-hover:opacity-100 blur transition-opacity duration-500 rounded-2xl pointer-events-none"></div>
-
-            <div className="absolute top-4 right-4 opacity-10 pointer-events-none">
-              <Quote size={40} className="text-white" />
-            </div>
-
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentTestimonial}
-                initial={{ opacity: 0, x: 20, filter: "blur(4px)" }}
-                animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, x: -20, filter: "blur(4px)" }}
-                transition={{ duration: 0.4 }}
-                className="flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex gap-1 mb-4">
-                    {[
-                      ...Array(testimonials[currentTestimonial]?.rating || 5),
-                    ].map((_, i) => (
-                      <Star
-                        key={i}
-                        size={12}
-                        className="fill-white text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]"
-                      />
-                    ))}
-                  </div>
-                  <p className="text-sm md:text-[13px] text-white/90 leading-relaxed font-sans font-medium mb-4 italic pl-3 border-l-2 border-white/20">
-                    "{testimonials[currentTestimonial]?.text}"
-                  </p>
-                </div>
-                <p className="text-[10px] text-white/50 uppercase tracking-widest font-heading font-black flex items-center gap-2">
-                  <span className="w-4 h-[1px] bg-white/30 block"></span>
-                  {testimonials[currentTestimonial]?.name}
-                </p>
-              </motion.div>
-            </AnimatePresence>
-          </motion.div>
-        </div>
-      )}
 
       {/* Absolute CTA button (bottom left next to social) for mobile fallback */}
       <div className="absolute bottom-6 left-6 z-30 md:hidden">

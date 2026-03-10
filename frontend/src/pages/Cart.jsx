@@ -12,9 +12,21 @@ import { useCart } from "../context/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 const Cart = () => {
-  const { Cart, removeFromCart, updateQuantity, getCartTotal } = useCart();
+  const { Cart, removeFromCart, updateQuantity, getCartTotal, clearCart } =
+    useCart();
   const subtotal = getCartTotal();
-  const shipping = subtotal > 150 ? 0 : 15;
+  const totalItemsCount = Cart.reduce(
+    (total, item) => total + item.quantity,
+    0,
+  );
+
+  let shipping = 60;
+  if (totalItemsCount >= 7) {
+    shipping = 135;
+  } else if (totalItemsCount >= 3) {
+    shipping = 100;
+  }
+
   const total = subtotal + shipping;
 
   if (Cart.length === 0) {
@@ -42,9 +54,19 @@ const Cart = () => {
   return (
     <div className="pt-32 pb-24 min-h-screen bg-[#f6f6f6] text-primary">
       <div className="container mx-auto px-6">
-        <h1 className="text-5xl font-black tracking-tighter uppercase mb-12">
-          Shopping Bag
-        </h1>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-12 gap-4">
+          <h1 className="text-5xl font-black tracking-tighter uppercase">
+            Shopping Bag
+          </h1>
+          {Cart.length > 0 && (
+            <button
+              onClick={clearCart}
+              className="text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 transition-colors px-4 py-2 rounded"
+            >
+              Clear Cart
+            </button>
+          )}
+        </div>
 
         <div className="flex flex-col lg:flex-row gap-16">
           {/* Cart Items List */}
@@ -108,10 +130,10 @@ const Cart = () => {
                     {/* Item Price */}
                     <div className="sm:text-right">
                       <p className="text-sm font-black">
-                        ${(item.price * item.quantity).toFixed(2)}
+                        ₹{(item.price * item.quantity).toFixed(2)}
                       </p>
                       <p className="text-[10px] text-accent/30 font-bold">
-                        ${item.price} each
+                        ₹{item.price} each
                       </p>
                     </div>
                   </motion.div>
@@ -139,32 +161,29 @@ const Cart = () => {
               <div className="space-y-4 mb-8">
                 <div className="flex justify-between text-sm">
                   <span className="text-accent/40 uppercase tracking-widest font-bold">
-                    Subtotal
+                    Product Price
                   </span>
-                  <span className="font-bold">${subtotal.toFixed(2)}</span>
+                  <span className="font-bold">₹{subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-accent/40 uppercase tracking-widest font-bold">
-                    Shipping
+                    Delivery / Shipping Charges
                   </span>
-                  <span className="font-bold">
-                    {shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`}
-                  </span>
+                  <span className="font-bold">₹{shipping.toFixed(2)}</span>
                 </div>
-                {shipping > 0 && (
-                  <div className="py-2 px-3 bg-accent/5 rounded-sm">
-                    <p className="text-[10px] text-accent/60 uppercase tracking-widest leading-relaxed">
-                      Add{" "}
-                      <span className="text-white font-bold">
-                        ${(150 - subtotal).toFixed(2)}
-                      </span>{" "}
-                      more for free shipping.
-                    </p>
-                  </div>
-                )}
+                <div className="py-2 px-3 bg-accent/5 rounded-sm">
+                  <p className="text-[10px] text-accent/60 uppercase tracking-widest leading-relaxed">
+                    Delivery charges:{" "}
+                    <span className="text-white font-bold">₹60</span> ({"<3"}{" "}
+                    items) / <span className="text-white font-bold">₹100</span>{" "}
+                    (3-6 items) /{" "}
+                    <span className="text-white font-bold">₹135</span> (7+
+                    items)
+                  </p>
+                </div>
                 <div className="flex justify-between text-lg font-black pt-4 border-t border-white/10 mt-4">
                   <span className="uppercase tracking-widest">Total</span>
-                  <span className="text-white">${total.toFixed(2)}</span>
+                  <span className="text-white">₹{total.toFixed(2)}</span>
                 </div>
               </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingBag,
@@ -9,12 +9,14 @@ import {
   Truck,
   RotateCcw,
   ShieldCheck,
+  ArrowRight,
 } from "lucide-react";
 import { useCart } from "../context/CartContext";
 
 const ProductDetails = () => {
   const { id } = useParams();
-  const { addToCart } = useCart();
+  const { addToCart, clearCart } = useCart();
+  const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [selectedSize, setSelectedSize] = useState("L");
   const [activeImage, setActiveImage] = useState(0);
@@ -55,12 +57,34 @@ const ProductDetails = () => {
 
   const handleAddToCart = () => {
     addToCart(product, selectedSize);
-    setIsAdded(true);
-    setTimeout(() => setIsAdded(false), 2000);
+    navigate("/Cart");
+  };
+
+  const handleBuyNow = () => {
+    clearCart();
+    addToCart(product, selectedSize);
+    navigate("/checkout");
   };
 
   return (
     <div className="pt-32 pb-24 bg-[#f6f6f6] text-primary min-h-screen">
+      <AnimatePresence>
+        {isAdded && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 20, x: "-50%" }}
+            className="fixed bottom-10 left-1/2 z-[100] bg-white text-black px-8 py-4 rounded-full shadow-2xl flex items-center gap-3 border border-black/5"
+          >
+            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+              <Check size={14} className="text-white" />
+            </div>
+            <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">
+              Added to Cart
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="container mx-auto px-6">
         <div className="flex flex-col lg:flex-row gap-16">
           {/* Left: Image Gallery */}
@@ -89,7 +113,6 @@ const ProductDetails = () => {
                 alt={product.name}
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent pointer-events-none" />
             </div>
           </div>
 
@@ -102,7 +125,7 @@ const ProductDetails = () => {
               {product.name}
             </h1>
             <p className="text-2xl font-bold mb-8 text-primary">
-              ${product.price}
+              ₹{product.price}
             </p>
 
             <p className="text-primary/60 leading-relaxed mb-6 text-sm max-w-md">
@@ -128,13 +151,13 @@ const ProductDetails = () => {
 
             {/* Size Selector */}
             <div className="mb-12">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-xs uppercase tracking-widest font-black">
-                  Select Size
+              <div className="flex items-center justify-between mb-8 pb-8 border-b border-primary/10">
+                <span className="text-3xl font-sans font-bold text-primary">
+                  ₹{product.price}
                 </span>
-                <button className="text-[10px] uppercase tracking-widest underline font-bold opacity-40 hover:opacity-100 transition-opacity">
-                  Size Guide
-                </button>
+                <span className="text-[10px] uppercase tracking-widest font-heading font-black text-primary/30">
+                  In Stock / Ready to Ship
+                </span>
               </div>
               <div className="flex flex-wrap gap-3">
                 {product.sizes.map((size) => (
@@ -150,24 +173,22 @@ const ProductDetails = () => {
             </div>
 
             {/* Actions */}
-            <div className="flex flex-col gap-4 mb-12">
+            <div className="flex flex-col sm:flex-row gap-4 mb-12">
               <button
                 onClick={handleAddToCart}
-                disabled={isAdded}
-                className={`py-4 uppercase tracking-widest text-xs flex items-center justify-center gap-2 font-bold rounded-full transition-all ${isAdded ? "bg-green-500 text-white" : "bg-primary text-white hover:bg-primary/90 hover:-translate-y-1 hover:shadow-xl"}`}
+                className="flex-1 bg-primary text-white py-5 flex items-center justify-center gap-3 font-heading font-black rounded-sm transition-all hover:bg-primary/90 hover:-translate-y-0.5 hover:shadow-xl group"
               >
-                {isAdded ? (
-                  <>
-                    <Check size={18} /> Added to Cart
-                  </>
-                ) : (
-                  <>
-                    <ShoppingBag size={18} /> Add to Cart
-                  </>
-                )}
+                Add to Cart
+                <ArrowRight
+                  size={18}
+                  className="group-hover:translate-x-1 transition-transform"
+                />
               </button>
-              <button className="py-4 uppercase tracking-widest text-xs font-bold rounded-full border border-primary/20 text-primary hover:bg-primary/5 transition-all">
-                Buy It Now
+              <button
+                onClick={handleBuyNow}
+                className="flex-1 bg-white border-2 border-primary text-primary py-5 flex items-center justify-center gap-3 font-heading font-black rounded-sm transition-all hover:bg-primary hover:text-white hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                Buy Now
               </button>
             </div>
 

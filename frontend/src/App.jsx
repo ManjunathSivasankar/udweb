@@ -10,6 +10,7 @@ import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
 import Checkout from "./pages/Checkout";
 import Admin from "./pages/Admin";
+import PaymentStatus from "./pages/PaymentStatus";
 import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { CollectionProvider } from "./context/CollectionContext";
@@ -34,6 +35,10 @@ function App() {
                 <Route path="signup" element={<Signup />} />
                 <Route path="profile" element={<Profile />} />
                 <Route path="admin" element={<Admin />} />
+                <Route
+                  path="payment-status/:orderId"
+                  element={<PaymentStatus />}
+                />
               </Route>
             </Routes>
           </Router>

@@ -1,0 +1,234 @@
+const nodemailer = require("nodemailer");
+
+/**
+ * notificationService
+ * Handles sending emails to the admin for order events.
+ *
+ * Requirements: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, ADMIN_EMAIL in .env
+ */
+
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT, // 587 for TLS, 465 for SSL
+    secure: process.env.SMTP_PORT == 465,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+};
+
+// Verify transporter on startup
+const verifyConnection = async () => {
+  const transporter = createTransporter();
+  try {
+    await transporter.verify();
+    console.log("📧 SMTP: Server is ready to take our messages");
+  } catch (error) {
+    console.error("📧 SMTP Verification Error:", error.message);
+    console.error(
+      "📧 Possible issues: Incorrect App Password, Port blocked, or DNS issue.",
+    );
+  }
+};
+verifyConnection();
+
+const sendWhatsappAlert = async (message) => {
+  const adminPhone = process.env.ADMIN_PHONE;
+  // We encourage using a simple HTTP API gateway for WhatsApp (like CallMeBot)
+  // Example URL in .env: https://api.callmebot.com/whatsapp.php?phone=[phone]&apikey=[key]&text=[text]
+  const gatewayUrl = process.env.WHATSAPP_GATEWAY_URL;
+
+  if (!gatewayUrl) {
+    return;
+  }
+
+  try {
+    const finalUrl = gatewayUrl
+      .replace("[phone]", encodeURIComponent(adminPhone))
+      .replace("[text]", encodeURIComponent(message));
+
+    const https = require("https");
+    https.get(finalUrl, (res) => {
+      if (res.statusCode === 200) {
+        console.log("✅ WhatsApp alert sent successfully.");
+      } else {
+        console.error("❌ WhatsApp alert failed with status:", res.statusCode);
+      }
+    });
+  } catch (err) {
+    console.error("❌ Error sending WhatsApp alert:", err.message);
+  }
+};
+
+const sendOrderInitiatedEmail = async (order) => {
+  try {
+    const transporter = createTransporter();
+    const adminEmail = process.env.ADMIN_EMAIL;
+
+    const mailOptions = {
+      from: `"GarageT Payments" <${process.env.SMTP_USER}>`,
+      to: adminEmail,
+      subject: `🆕 New Order Initiated - ₹${order.totalAmount}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+          <h2 style="color: #333; text-transform: uppercase;">New Order Started</h2>
+          <p><strong>Order ID:</strong> ${order._id}</p>
+          <p><strong>Amount:</strong> ₹${order.totalAmount}</p>
+          <p><strong>Shipping Method:</strong> ${order.shippingMethod}</p>
+          <hr />
+          <h3>Items:</h3>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            ${order.items
+              .map(
+                (item) => `
+              <div style="display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                ${item.image ? `<img src="${item.image}" width="40" height="50" style="object-fit: cover; border-radius: 4px;" />` : ""}
+                <div>
+                  <p style="margin: 0; font-size: 14px;"><strong>${item.name}</strong> (${item.size})</p>
+                  <p style="margin: 0; font-size: 12px; color: #666;">Qty: ${item.quantity} - ₹${item.price * item.quantity}</p>
+                </div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+          <hr />
+          <h3>Customer Details:</h3>
+          <p><strong>Name:</strong> ${order.customerDetails.name}</p>
+          <p><strong>Phone:</strong> ${order.customerDetails.phone}</p>
+          <p><strong>Address:</strong> ${order.shippingAddress.address}, ${order.shippingAddress.city}, ${order.shippingAddress.state}, ${order.shippingAddress.pinCode}</p>
+          <hr />
+          <p style="font-size: 12px; color: #666;">This is an automated notification. Payment is currently <strong>PENDING</strong>.</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log("✅ Order initiated email sent to admin.");
+  } catch (error) {
+    console.error("❌ Error sending order initiated email:", error);
+  }
+};
+
+const sendUserClaimsPaidEmail = async (order) => {
+  try {
+    const transporter = createTransporter();
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const waLink = `https://wa.me/${order.customerDetails.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
+      `Hi ${order.customerDetails.name}, your order ${order._id.toString().slice(-8)} for ₹${order.totalAmount} has been confirmed! 🚀`,
+    )}`;
+
+    const mailOptions = {
+      from: `"GarageT Payments" <${process.env.SMTP_USER}>`,
+      to: adminEmail,
+      subject: `💰 Payment Confirmation Requested - ${order.customerDetails.name}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+          <h2 style="color: #27ae60; text-transform: uppercase;">User Claims Payment Made</h2>
+          <p><strong>Order ID:</strong> ${order._id}</p>
+          <p><strong>User:</strong> ${order.customerDetails.name}</p>
+          <p><strong>Amount:</strong> ₹${order.totalAmount}</p>
+          
+          <div style="margin: 30px 0; padding: 20px; background-color: #f9f9f9; border-radius: 8px; text-align: center;">
+            <p style="margin-bottom: 20px;"><strong>Action Required:</strong> Verify the payment in your UPI/Bank app, then click below to notify the customer:</p>
+            <a href="${waLink}" style="background-color: #25D366; color: white; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+              CONFIRM VIA WHATSAPP
+            </a>
+          </div>
+          
+          <p style="font-size: 12px; color: #666;">Once you confirm via WhatsApp, please remember to update the order status to <strong>SUCCESS</strong> in your database/dashboard.</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log("✅ User claims paid email sent to admin.");
+  } catch (error) {
+    console.error("❌ Error sending user claims paid email:", error);
+  }
+};
+
+const sendOrderConfirmedEmail = async (order) => {
+  try {
+    const transporter = createTransporter();
+    const customerEmail =
+      order.customerDetails?.email || order.shippingAddress?.email;
+
+    if (!customerEmail) {
+      console.warn("⚠️ No customer email found for order:", order._id);
+      return;
+    }
+
+    const mailOptions = {
+      from: `"UrbanDos" <${process.env.SMTP_USER}>`,
+      to: customerEmail,
+      subject: `✅ Order Confirmed! #${order._id.toString().slice(-8)}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+          <h2 style="color: #27ae60; text-transform: uppercase;">Payment Confirmed!</h2>
+          <p>Hi ${order.customerDetails.name},</p>
+          <p>We've verified your payment for Order <strong>#${order._id.toString().slice(-8)}</strong>. Your order is now being processed and will be shipped soon! 🚀</p>
+          <hr />
+          <h3>Order Summary:</h3>
+          <p><strong>Total Amount:</strong> ₹${order.totalAmount}</p>
+          <p><strong>Shipping to:</strong> ${order.shippingAddress.address}, ${order.shippingAddress.city}</p>
+          <hr />
+          <p>Thank you for shopping with UrbanDos!</p>
+          <p style="font-size: 12px; color: #666;">This is an automated confirmation of your manual payment verification.</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Confirmation email sent to customer: ${customerEmail}`);
+  } catch (error) {
+    console.error("❌ Error sending order confirmation email:", error);
+  }
+};
+
+const sendOrderDispatchedEmail = async (order) => {
+  try {
+    const transporter = createTransporter();
+    const customerEmail =
+      order.customerDetails?.email || order.shippingAddress?.email;
+
+    if (!customerEmail) {
+      console.warn("⚠️ No customer email found for order:", order._id);
+      return;
+    }
+
+    const mailOptions = {
+      from: `"UrbanDos" <${process.env.SMTP_USER}>`,
+      to: customerEmail,
+      subject: `🚚 Your Order is being Prepared for Dispatch! #${order._id.toString().slice(-8)}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+          <h2 style="color: #f39c12; text-transform: uppercase;">Preparing For Dispatch</h2>
+          <p>Hi ${order.customerDetails.name},</p>
+          <p>Great news! Your order <strong>#${order._id.toString().slice(-8)}</strong> is currently being prepared for dispatch.</p>
+          <p>You will receive another update once the package has physically shipped to your location.</p>
+          <hr />
+          <h3>Shipping to:</h3>
+          <p>${order.shippingAddress.address}, ${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.pinCode}</p>
+          <hr />
+          <p>Thank you for shopping with UrbanDos!</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Dispatch notification sent to customer: ${customerEmail}`);
+  } catch (error) {
+    console.error("❌ Error sending order dispatch email:", error);
+  }
+};
+
+module.exports = {
+  sendOrderInitiatedEmail,
+  sendUserClaimsPaidEmail,
+  sendOrderConfirmedEmail,
+  sendOrderDispatchedEmail,
+  sendWhatsappAlert,
+};

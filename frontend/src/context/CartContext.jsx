@@ -6,8 +6,7 @@ const CartContext = createContext();
 export const useCart = () => useContext(CartContext);
 
 // Change this to your backend URL once deployed
-const API_URL =
-  (import.meta.env.VITE_API_URL || "http://localhost:5000") + "/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export const CartProvider = ({ children }) => {
   const { user } = useAuth();

@@ -11,6 +11,10 @@ frontend/dist/
 frontend/.env
 backend/.env
 
+# Firebase service account key (contains private credentials - NEVER commit this)
+backend/ServiceAccountKey.json
+ServiceAccountKey.json
+
 # logs
 *.log
 

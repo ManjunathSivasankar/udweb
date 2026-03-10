@@ -54,7 +54,7 @@
 
   /* Utility for inverted sections (like New Arrivals) */
   .theme-light {
-    @apply bg-[#f6f6f6] text-primary;
+    @apply bg-[#e5e5e5] text-primary;
   }
 
   .theme-light h1,

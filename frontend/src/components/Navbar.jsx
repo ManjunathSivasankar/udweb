@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { ShoppingBag, User, Menu, X, ChevronDown } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  ShoppingBag,
+  User,
+  Menu,
+  X,
+  ChevronDown,
+  ChevronLeft,
+  Instagram,
+  Youtube,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "../context/CartContext";
 import { useCollection } from "../context/CollectionContext";
@@ -26,14 +35,14 @@ const Navbar = () => {
 
   const isHome = pathname === "/";
 
-  // Dynamic text color based on scroll position OR page route
-  // If we are NOT on home page, the background is always white, so text must be dark.
-  const isDarkText = !isHome || isPastHero;
+  const isDarkPage = pathname === "/checkout" || pathname === "/admin";
+  const isDarkText = (!isHome && !isDarkPage) || (isHome && isPastHero);
 
   const textColorClass = isDarkText ? "text-primary" : "text-white";
   const hoverColorClass = isDarkText
     ? "hover:text-primary/70"
     : "hover:text-white/70";
+
   const bgColorClass = isScrolled
     ? isDarkText
       ? "bg-[#f6f6f6]/90 shadow-[0_4px_30px_rgba(0,0,0,0.05)] border-b border-primary/5 text-primary"
@@ -44,11 +53,26 @@ const Navbar = () => {
 
   return (
     <nav
-      className={`fixed w-full z-50 transition-all duration-500 backdrop-blur-md ${isScrolled ? "py-4" : "py-6"} ${bgColorClass}`}
+      className={`fixed w-full transition-all duration-500 ${
+        isOpen
+          ? "z-[1000] bg-white"
+          : "z-50 backdrop-blur-md " +
+            (isScrolled ? "py-4" : "py-6") +
+            " " +
+            bgColorClass
+      }`}
     >
       <div className="container mx-auto px-6 flex justify-between items-center relative">
-        {/* Left: Desktop Menu */}
+        {/* Left Menu */}
         <div className="hidden md:flex items-center space-x-8 flex-1">
+          {!isHome && (
+            <button
+              onClick={() => navigate(-1)}
+              className={`flex items-center gap-1 font-sans font-medium transition-colors ${textColorClass} ${hoverColorClass}`}
+            >
+              <ChevronLeft size={16} /> Back
+            </button>
+          )}
           <div
             className="relative group"
             onMouseEnter={() => setActiveDropdown("collections")}
@@ -57,12 +81,15 @@ const Navbar = () => {
             <button
               className={`nav-link flex items-center gap-1 py-2 font-sans font-medium transition-colors ${textColorClass} ${hoverColorClass}`}
             >
-              Collections{" "}
+              Collections
               <ChevronDown
                 size={14}
-                className={`transition-transform duration-300 ${activeDropdown === "collections" ? "rotate-180" : ""}`}
+                className={`transition-transform duration-300 ${
+                  activeDropdown === "collections" ? "rotate-180" : ""
+                }`}
               />
             </button>
+
             <AnimatePresence>
               {activeDropdown === "collections" && (
                 <motion.div
@@ -74,12 +101,16 @@ const Navbar = () => {
                   {collections.map((item) => (
                     <Link
                       key={item._id || item.name}
-                      to={`/category/${item.collectionId || item.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      to={`/category/${
+                        item.collectionId ||
+                        item.name.toLowerCase().replace(/\s+/g, "-")
+                      }`}
                       className="text-sm text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 font-sans"
                     >
                       {item.name}
                     </Link>
                   ))}
+
                   <div className="col-span-2 pt-4 border-t border-white/10">
                     <a
                       href="/#collections-section"
@@ -92,12 +123,14 @@ const Navbar = () => {
               )}
             </AnimatePresence>
           </div>
+
           <Link
             to="/shop"
             className={`nav-link font-sans font-medium transition-colors ${textColorClass} ${hoverColorClass}`}
           >
             New Arrivals
           </Link>
+
           <Link
             to="/shop"
             className={`nav-link font-sans font-medium transition-colors ${textColorClass} ${hoverColorClass}`}
@@ -106,8 +139,16 @@ const Navbar = () => {
           </Link>
         </div>
 
-        {/* Center: Brand Logo */}
-        <div className="flex justify-center md:absolute md:left-1/2 md:-translate-x-1/2 flex-1">
+        {/* Logo */}
+        <div className="flex justify-center md:absolute md:left-1/2 md:-translate-x-1/2 flex-1 relative">
+          {!isHome && (
+            <button
+              onClick={() => navigate(-1)}
+              className={`absolute left-0 top-1/2 -translate-y-1/2 md:hidden ${textColorClass}`}
+            >
+              <ChevronLeft size={20} />
+            </button>
+          )}
           <Link
             to="/"
             className="flex items-center justify-center hover:scale-105 transition-transform"
@@ -120,7 +161,7 @@ const Navbar = () => {
           </Link>
         </div>
 
-        {/* Right: Icons */}
+        {/* Right Icons */}
         <div className="flex items-center justify-end space-x-6 flex-1">
           <Link
             to="/profile"
@@ -128,17 +169,23 @@ const Navbar = () => {
           >
             <User size={20} />
           </Link>
+
           <Link
             to="/Cart"
             className={`relative transition-colors ${textColorClass} ${hoverColorClass}`}
           >
             <ShoppingBag size={20} />
             <span
-              className={`absolute -top-2 -right-2 text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full ${!isDarkText ? "bg-[#f6f6f6] text-primary" : "bg-primary text-[#f6f6f6]"}`}
+              className={`absolute -top-2 -right-2 text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full ${
+                !isDarkText
+                  ? "bg-[#f6f6f6] text-primary"
+                  : "bg-primary text-[#f6f6f6]"
+              }`}
             >
               {Cart.reduce((total, item) => total + (item.quantity || 1), 0)}
             </span>
           </Link>
+
           <button
             className={`md:hidden ${textColorClass}`}
             onClick={() => setIsOpen(!isOpen)}
@@ -148,38 +195,94 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile Backdrop */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, x: "100%" }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: "100%" }}
-            className="fixed inset-0 bg-[#f6f6f6] z-40 flex flex-col p-8 md:hidden text-primary"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsOpen(false)}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[998] md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Drawer */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed top-0 right-0 bottom-0 w-[80%] max-w-[400px] z-[999] flex flex-col p-8 md:hidden bg-white text-[#141417] shadow-2xl"
           >
-            <div className="flex justify-between items-center mb-12">
-              <img
-                src={logoSrc}
-                alt="Urban Dust Logo"
-                className="h-6 w-auto invert"
-              />
-              <button onClick={() => setIsOpen(false)}>
+            <div className="flex justify-between items-center mb-16">
+              <Link
+                to="/"
+                onClick={() => setIsOpen(false)}
+                className="flex-1 flex justify-center translate-x-4"
+              >
+                <img
+                  src={logoSrc}
+                  alt="Urban Dust Logo"
+                  className="h-6 w-auto invert"
+                />
+              </Link>
+
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-2 hover:bg-[#141417]/10 rounded-full transition-colors ml-auto"
+              >
                 <X size={24} />
               </button>
             </div>
-            <div className="flex flex-col space-y-8 text-2xl font-heading font-black uppercase">
+
+            {/* Mobile Links */}
+            <div className="flex flex-col space-y-10 text-3xl font-heading font-black uppercase tracking-tighter">
               <Link to="/shop" onClick={() => setIsOpen(false)}>
                 Collections
               </Link>
+
               <Link to="/shop" onClick={() => setIsOpen(false)}>
                 New Arrivals
               </Link>
+
               <Link to="/shop" onClick={() => setIsOpen(false)}>
                 Products
               </Link>
+
               <Link to="/profile" onClick={() => setIsOpen(false)}>
                 Account
               </Link>
+            </div>
+
+            {/* Social Icons */}
+            <div className="mt-auto pt-10 border-t border-primary/10">
+              <p className="text-[10px] font-heading font-black uppercase tracking-[0.2em] text-primary/30 mb-6">
+                Follow the identity
+              </p>
+
+              <div className="flex gap-4">
+                <a
+                  href="https://www.instagram.com/urban.dos/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-12 h-12 flex items-center justify-center bg-primary/5 rounded-full text-primary/70 hover:text-primary hover:bg-primary/10 transition-all border border-primary/5"
+                >
+                  <Instagram size={20} />
+                </a>
+
+                <a
+                  href="https://www.youtube.com/@urbandos7"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-12 h-12 flex items-center justify-center bg-primary/5 rounded-full text-primary/70 hover:text-primary hover:bg-primary/10 transition-all border border-primary/5"
+                >
+                  <Youtube size={20} />
+                </a>
+              </div>
             </div>
           </motion.div>
         )}

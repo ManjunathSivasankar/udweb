@@ -10,8 +10,6 @@ const Home = () => {
   const [newArrivals, setNewArrivals] = useState([]);
   const { collections, loading: collectionsLoading } = useCollection();
   const [loading, setLoading] = useState(true);
-  const [showAuthToast, setShowAuthToast] = useState(false);
-  const [toastDismissed, setToastDismissed] = useState(false);
 
   // API Base URL from Environment Variables
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -40,57 +38,9 @@ const Home = () => {
     fetchData();
   }, []);
 
-  // Handle Scroll for Auth Toast
-  useEffect(() => {
-    const handleScroll = () => {
-      // Show toast after scrolling past hero section (approx 100vh) if not dismissed
-      if (window.scrollY > window.innerHeight && !toastDismissed) {
-        setShowAuthToast(true);
-      } else {
-        setShowAuthToast(false);
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [toastDismissed]);
-
   return (
     <div className="flex flex-col">
       <Hero />
-
-      {/* Floating Auth Toast */}
-      <AnimatePresence>
-        {showAuthToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, x: "-50%" }}
-            animate={{ opacity: 1, y: 0, x: "-50%" }}
-            exit={{ opacity: 0, y: 50, x: "-50%" }}
-            className="fixed bottom-8 left-1/2 z-50 bg-[#f6f6f6] shadow-2xl rounded-full px-6 py-3 flex items-center gap-4 border border-primary/10"
-          >
-            <span className="text-sm font-sans font-bold text-primary">
-              Sign in to unlock personalized experience
-            </span>
-            <div className="flex items-center gap-2 border-l border-primary/10 pl-4">
-              <Link
-                to="/login"
-                className="text-xs uppercase font-heading font-black tracking-widest text-primary hover:text-primary/60 transition-colors"
-              >
-                Login
-              </Link>
-              <button
-                onClick={() => {
-                  setShowAuthToast(false);
-                  setToastDismissed(true);
-                }}
-                className="p-1 hover:bg-primary/5 rounded-full transition-colors text-primary/40 hover:text-primary"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* New Arrivals Section (Light Theme) */}
       <section className="theme-light py-32 z-10 relative shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
@@ -190,6 +140,108 @@ const Home = () => {
               </div>
             </motion.div>
           ))}
+        </div>
+      </section>
+
+      {/* Our Story Section */}
+      <section className="py-32 bg-[#e5e5e5] text-primary overflow-hidden">
+        <div className="container mx-auto px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            {/* Left: Content */}
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8 }}
+              viewport={{ once: true }}
+              className="max-w-xl"
+            >
+              <span className="text-primary/40 uppercase tracking-[0.3em] text-[10px] font-heading font-bold block mb-4">
+                The Narrative
+              </span>
+              <h2 className="text-4xl md:text-6xl font-heading font-black tracking-tighter uppercase mb-8 leading-[0.9]">
+                Crafting <br />
+                <span className="text-primary/30 text-[0.8em]">
+                  The Identity
+                </span>
+              </h2>
+              <div className="space-y-6 text-lg font-sans font-medium text-primary/80 leading-relaxed">
+                <p>
+                  It started in a dorm room during my 3rd year of college.
+                  Driven by a passion for aesthetics and the raw energy of
+                  street culture, I founded{" "}
+                  <span className="font-black text-primary italic">
+                    Fungistyle
+                  </span>
+                  .
+                </p>
+                <p>
+                  We aren't just making clothes; we're building a medium for
+                  self-expression. Our focus has always been on premium quality
+                  oversized t-shirts that don't just fit, but make a statement.
+                </p>
+                <p>
+                  Every piece is a canvas. From unique, hand-crafted designs to
+                  limitless customization, we ensure that what you wear is as
+                  distinctive as your own story.
+                </p>
+              </div>
+              <div className="mt-12">
+                <div className="inline-flex items-center gap-4 py-2 px-6 bg-primary text-white rounded-full font-heading font-black uppercase text-xs tracking-widest hover:scale-105 transition-transform cursor-default">
+                  Est. 2024{" "}
+                  <span className="w-1 h-1 bg-white/30 rounded-full"></span> 3rd
+                  Year Roots
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Right: Testimonial Marquee / Vertical Banner */}
+            <div className="relative h-[500px] flex flex-col justify-center overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#e5e5e5] to-transparent z-10 pointer-events-none"></div>
+              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#e5e5e5] to-transparent z-10 pointer-events-none"></div>
+
+              <motion.div
+                className="flex flex-col gap-6"
+                animate={{ y: [0, -600] }}
+                transition={{
+                  repeat: Infinity,
+                  duration: 30,
+                  ease: "linear",
+                }}
+              >
+                {[1, 2, 3, 4, 1, 2, 3, 4].map((n, i) => (
+                  <div
+                    key={i}
+                    className="p-8 bg-white/40 backdrop-blur-sm border border-primary/5 rounded-2xl shadow-sm hover:bg-white/60 transition-colors"
+                  >
+                    <div className="flex gap-1 mb-4 text-primary">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <svg
+                          key={s}
+                          className="w-3 h-3 fill-current"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                        </svg>
+                      ))}
+                    </div>
+                    <p className="font-sans italic font-medium text-primary/70 text-sm mb-4">
+                      {n === 1 &&
+                        "The quality of the oversized t-shirts is unmatched. Truly premium quality."}
+                      {n === 2 &&
+                        "Love the customization options. My t-shirt feels unique and personally crafted."}
+                      {n === 3 &&
+                        "Fast delivery and amazing fit. The designs are unlike anything else in the market."}
+                      {n === 4 &&
+                        "Support a college entrepreneur! The brand energy is amazing and the quality is even better."}
+                    </p>
+                    <p className="font-heading font-black text-[10px] uppercase tracking-widest text-primary/40">
+                      — Client Review {i + 1}
+                    </p>
+                  </div>
+                ))}
+              </motion.div>
+            </div>
+          </div>
         </div>
       </section>
     </div>

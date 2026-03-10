@@ -50,7 +50,87 @@ const getUserOrders = async (req, res) => {
   }
 };
 
+// Get all orders for admin
+const getAllOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({}).sort({ createdAt: -1 });
+    res.status(200).json(orders);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error fetching all orders", error: error.message });
+  }
+};
+
+// Update order status
+const updateOrderStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = [
+      "Order Placed",
+      "Payment Completed",
+      "Order Confirmed",
+      "Preparing for Dispatch",
+      "Shipped",
+      "Delivered",
+      "Cancelled",
+    ];
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const order = await Order.findByIdAndUpdate(id, { status }, { new: true });
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Trigger emails based on new status
+    if (status === "Order Confirmed") {
+      const {
+        sendOrderConfirmedEmail,
+      } = require("../services/notificationService");
+      sendOrderConfirmedEmail(order).catch(console.error);
+    } else if (status === "Preparing for Dispatch") {
+      const {
+        sendOrderDispatchedEmail,
+      } = require("../services/notificationService");
+      sendOrderDispatchedEmail(order).catch(console.error);
+    }
+
+    res.status(200).json({ message: "Order status updated", order });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error updating order status", error: error.message });
+  }
+};
+
+// Delete order
+const deleteOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findByIdAndDelete(id);
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    res.status(200).json({ message: "Order deleted successfully" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error deleting order", error: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getUserOrders,
+  getAllOrders,
+  updateOrderStatus,
+  deleteOrder,
 };

@@ -5,7 +5,7 @@ const {
   updateGaragetItem,
   removeFromGaraget,
   clearGaraget,
-} = require("../controllers/GaragetController");
+} = require("../controllers/cartController");
 const { verifyToken } = require("../middleware/authMiddleware");
 
 router.use(verifyToken); // Protect all Garaget routes

@@ -3,39 +3,72 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 
-// Load env vars
-dotenv.config();
+const admin = require("firebase-admin");
 
-// Express App
+dotenv.config();
 const app = express();
-app.use(cors());
+
+// Initialize Firebase Admin
+if (admin.apps.length === 0) {
+  try {
+    const saPath =
+      process.env.FIREBASE_SERVICE_ACCOUNT_PATH || "./ServiceAccountKey.json";
+    const saFullPath = require("path").resolve(saPath);
+
+    if (require("fs").existsSync(saFullPath)) {
+      admin.initializeApp({
+        credential: admin.credential.cert(require(saFullPath)),
+      });
+      console.log("🔥 Firebase Admin Initialized (Key File)");
+    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      admin.initializeApp({
+        credential: admin.credential.cert(
+          JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
+        ),
+      });
+      console.log("🔥 Firebase Admin Initialized (Env Variable)");
+    } else {
+      console.warn("⚠️ Firebase Admin NOT Initialized (No credentials found)");
+    }
+  } catch (error) {
+    if (error.code === "app/duplicate-app") {
+      console.log("🔥 Firebase Admin already initialized (re-use)");
+    } else {
+      console.error("❌ Firebase Initialization Error:", error.message);
+    }
+  }
+}
+
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(",").map((s) => s.trim())
+  : ["http://localhost:5173", "http://localhost:3000"];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
-// Prevent browser caching for all API routes
-app.use((req, res, next) => {
-  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
-  next();
-});
-
-// MongoDB Connection
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected Successfully!"))
-  .catch((err) => console.log("MongoDB Connection Error:", err));
+  .then(() => console.log("MongoDB Connected"))
+  .catch((err) => console.log(err));
 
-// Routes
-const productRoutes = require("./routes/productRoutes");
-const collectionRoutes = require("./routes/collectionRoutes");
-const testimonialRoutes = require("./routes/testimonialRoutes");
+app.use("/api/products", require("./routes/productRoutes"));
+app.use("/api/collections", require("./routes/collectionRoutes"));
+app.use("/api/testimonials", require("./routes/testimonialRoutes"));
+app.use("/api/cart", require("./routes/cartRoutes"));
+app.use("/api/orders", require("./routes/orderRoutes"));
+app.use("/api/payment", require("./routes/paymentRoutes"));
 
-app.use("/api/products", productRoutes);
-app.use("/api/collections", collectionRoutes);
-app.use("/api/testimonials", testimonialRoutes);
-
-// Basic Route
-app.get("/", (req, res) => {
-  res.send("API is running... MongoDB connection test.");
-});
+app.get("/", (req, res) => res.send("API Regular"));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log("running"));

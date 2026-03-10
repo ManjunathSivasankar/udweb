@@ -1,9 +1,25 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, Eye } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ShoppingCart, Eye, Zap } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useCart } from "../context/CartContext";
 
 const ProductCard = ({ product }) => {
+  const { addToCart, clearCart } = useCart();
+  const navigate = useNavigate();
+
+  const handleAddToCart = (e) => {
+    e.preventDefault();
+    addToCart(product, product.sizes?.[0] || "L");
+    navigate("/Cart");
+  };
+
+  const handleBuyNow = (e) => {
+    e.preventDefault();
+    clearCart();
+    addToCart(product, product.sizes?.[0] || "L");
+    navigate("/checkout");
+  };
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -28,21 +44,24 @@ const ProductCard = ({ product }) => {
           </span>
         )}
 
-        {/* Hover Actions */}
-        <div className="absolute inset-x-0 bottom-0 p-4 translate-y-[120%] group-hover:translate-y-0 transition-transform duration-500 ease-out flex gap-2 z-20">
-          <button className="flex-grow bg-primary text-white hover:bg-black py-3 px-0 flex items-center justify-center gap-2 text-[11px] font-heading font-bold tracking-widest uppercase rounded-md transition-colors shadow-lg">
+        {/* Actions - Always Visible */}
+        <div className="absolute inset-x-0 bottom-0 p-4 flex gap-2 z-20">
+          <button
+            onClick={handleAddToCart}
+            className="flex-grow bg-primary text-white hover:bg-black py-3 px-0 flex items-center justify-center gap-2 text-[11px] font-heading font-bold tracking-widest uppercase rounded-md transition-colors shadow-lg"
+          >
             <ShoppingCart size={14} /> Add to Cart
           </button>
-          <Link
-            to={`/product/${product._id}`}
-            className="p-3 bg-white text-primary hover:bg-primary hover:text-white transition-colors duration-300 rounded-md shadow-lg flex items-center justify-center"
+          <button
+            onClick={handleBuyNow}
+            className="px-4 bg-white text-primary hover:bg-primary hover:text-white transition-colors duration-300 rounded-md shadow-lg flex items-center justify-center font-heading font-bold text-[11px] uppercase tracking-widest"
           >
-            <Eye size={16} />
-          </Link>
+            Buy Now
+          </button>
         </div>
 
-        {/* Subtle Bottom Gradient for Action Visibility */}
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+        {/* Subtle Bottom Gradient for Action Visibility - always visible */}
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
       </div>
 
       {/* Info */}
@@ -55,7 +74,7 @@ const ProductCard = ({ product }) => {
             {product.name}
           </Link>
           <span className="text-sm font-sans font-bold text-primary shrink-0">
-            ${product.price}
+            ₹{product.price}
           </span>
         </div>
         <p className="text-[10px] uppercase tracking-widest text-primary/50 font-sans font-medium">
