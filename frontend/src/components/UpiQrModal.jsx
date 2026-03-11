@@ -20,7 +20,7 @@ const UpiQrModal = ({ upiLink, orderId, amount, onClose }) => {
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:5000" : "https://my-shop-backend-z7jb.onrender.com");
 
   // Detect mobile once on mount
   useEffect(() => {
@@ -179,3 +179,4 @@ const UpiQrModal = ({ upiLink, orderId, amount, onClose }) => {
 };
 
 export default UpiQrModal;
+

@@ -33,7 +33,7 @@ const Profile = () => {
   const [loadingOrders, setLoadingOrders] = useState(true);
   const ordersSectionRef = useRef(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:5000" : "https://my-shop-backend-z7jb.onrender.com");
 
   const scrollToOrders = () => {
     ordersSectionRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -472,3 +472,4 @@ const Profile = () => {
 };
 
 export default Profile;
+
