@@ -361,13 +361,20 @@ const sendTestEmail = async (to) => {
       return { ok: false, error: "Missing target email and ADMIN_EMAIL" };
     }
 
-    const info = await transporter.sendMail({
+    // Wrap in timeout (30 seconds max for sending)
+    const emailPromise = transporter.sendMail({
       from: `"UrbanDos" <${getFromAddress()}>`,
       to: target,
       subject: "UrbanDos SMTP Test",
       text: "SMTP test successful from deployed backend.",
       html: "<p><strong>SMTP test successful</strong> from deployed backend.</p>",
     });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Email send timeout (30s)")), 30000),
+    );
+
+    const info = await Promise.race([emailPromise, timeoutPromise]);
 
     return { ok: true, messageId: info.messageId, accepted: info.accepted };
   } catch (err) {
