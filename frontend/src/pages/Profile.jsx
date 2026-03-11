@@ -181,9 +181,12 @@ const Profile = () => {
                   className="w-full flex items-center justify-between p-4 rounded-md text-xs font-bold uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all mt-8"
                 >
                   <span className="flex items-center gap-4">
-                    <LogOut size={16} /> Terminate Session
+                    <LogOut size={16} /> Log Out
                   </span>
                 </button>
+                <p className="mt-2 text-[9px] uppercase tracking-widest font-bold text-primary/40">
+                  Log out to switch to another account on this device.
+                </p>
               </div>
             </motion.div>
           </div>
