@@ -39,16 +39,65 @@ if (admin.apps.length === 0) {
   }
 }
 
-const allowedOrigins = process.env.CLIENT_URL
-  ? process.env.CLIENT_URL.split(",").map((s) => s.trim())
+const configuredOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(",").map((s) => s.trim()).filter(Boolean)
   : ["http://localhost:5173", "http://localhost:3000"];
+
+const normalizeOrigin = (value) => {
+  if (!value) return "";
+  return value.trim().replace(/\/+$/, "");
+};
+
+const allowedOrigins = new Set(configuredOrigins.map(normalizeOrigin));
+
+const netlifySites = configuredOrigins
+  .map((origin) => {
+    try {
+      const { hostname, protocol } = new URL(origin);
+      if (!hostname.endsWith(".netlify.app")) return null;
+      const siteName = hostname.split(".")[0];
+      return { siteName, protocol };
+    } catch {
+      return null;
+    }
+  })
+  .filter(Boolean);
+
+const isAllowedOrigin = (origin) => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (allowedOrigins.has(normalizedOrigin)) return true;
+
+  try {
+    const { hostname, protocol } = new URL(normalizedOrigin);
+
+    // Always allow local frontend dev servers.
+    if (
+      protocol === "http:" &&
+      (hostname === "localhost" || hostname === "127.0.0.1")
+    ) {
+      return true;
+    }
+
+    // Allow Netlify deploy-preview/branch subdomains for configured sites.
+    for (const site of netlifySites) {
+      if (protocol !== site.protocol) continue;
+      if (hostname === `${site.siteName}.netlify.app`) return true;
+      if (hostname.endsWith(`--${site.siteName}.netlify.app`)) return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+};
 
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (isAllowedOrigin(origin)) return callback(null, true);
+      console.warn(`[CORS] Blocked origin: ${origin}`);
       callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
