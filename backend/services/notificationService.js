@@ -22,11 +22,22 @@ const createTransporter = () => {
   const user = (process.env.SMTP_USER || "").toLowerCase();
   if (host.includes("gmail") || user.endsWith("@gmail.com")) {
     return nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
       auth: {
         user: process.env.SMTP_USER,
         pass: smtpPass,
       },
+      tls: {
+        servername: "smtp.gmail.com",
+        rejectUnauthorized: false,
+      },
+      // Prefer IPv4 in hosted environments where IPv6 routes can stall.
+      family: 4,
+      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 12000),
+      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 10000),
+      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 15000),
     });
   }
 
