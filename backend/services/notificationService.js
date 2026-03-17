@@ -29,13 +29,16 @@ const createTransporter = () => {
   return nodemailer.createTransport({
     host: BREVO_HOST,
     port: BREVO_PORT,
-    secure: BREVO_PORT === 465, // Use SSL for 465, TLS/STARTTLS for 587
+    secure: BREVO_PORT === 465,
     auth: {
       user: BREVO_USER,
       pass: BREVO_KEY,
     },
-    // Force IPv4 to avoid ENETUNREACH on Render's network
+    // Force IPv4 and increase timeouts for Render network stability
     family: 4,
+    connectionTimeout: 30000, // 30 seconds to establish connection
+    greetingTimeout: 20000,   // 20 seconds to wait for SMTP greeting
+    socketTimeout: 45000,     // 45 seconds for data transmission
   });
 };
 
