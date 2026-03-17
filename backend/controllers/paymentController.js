@@ -68,26 +68,24 @@ const initiatePayment = async (req, res) => {
 
     console.log("[PAYMENT] Order created and UPI link generated:", newOrder._id);
 
-    // Notify admin immediately when a new order is created.
-    try {
-      await sendOrderInitiatedAlert(newOrder);
-      console.log("[EMAIL] Admin alert sent for order:", newOrder._id);
-    } catch (emailErr) {
-      console.error(`[EMAIL ERROR] Admin alert failed for order ${newOrder._id}:`, emailErr.message);
-    }
-
-    // Also notify the customer that we've received their order.
-    try {
-      const customerEmail = newOrder.customerDetails.email;
-      await sendOrderReceivedEmail(newOrder, customerEmail);
-      console.log("[EMAIL] Customer confirmation sent to:", customerEmail);
-    } catch (emailErr) {
-      console.error(`[EMAIL ERROR] Customer confirmation failed for order ${newOrder._id}:`, emailErr.message);
-    }
-
-    sendWhatsappAlert(
-      `🆕 New Order #${newOrder._id.toString().slice(-8)} initiated for ₹${totalAmount}. Please check dashboard.`,
-    ).catch(console.error);
+    // Notify admin & customer in the background to avoid blocking the response
+    // If the email service is slow, this will prevent the client from hanging on "PROCESSING..."
+    (async () => {
+      try {
+        await sendOrderInitiatedAlert(newOrder);
+        console.log("[EMAIL] Admin alert sent for order:", newOrder._id);
+        
+        const customerEmail = newOrder.customerDetails.email;
+        await sendOrderReceivedEmail(newOrder, customerEmail);
+        console.log("[EMAIL] Customer confirmation sent to:", customerEmail);
+        
+        await sendWhatsappAlert(
+          `🆕 New Order #${newOrder._id.toString().slice(-8)} initiated for ₹${totalAmount}. Please check dashboard.`,
+        );
+      } catch (bgErr) {
+        console.error(`[BACKGROUND NOTIFY ERROR] Order ${newOrder._id}:`, bgErr.message);
+      }
+    })();
 
     return res.status(201).json({
       orderId: newOrder._id,
@@ -119,17 +117,20 @@ const confirmPayment = async (req, res) => {
       await order.save();
     }
 
-    // Trigger notification to admin
-    const paymentSignalResult = await sendUserClaimsPaidEmail(order);
-    if (!paymentSignalResult?.ok) {
-      console.error(
-        `[EMAIL] Failed to send payment-completed admin email for order ${order._id}:`,
-        paymentSignalResult?.error || "Unknown error",
-      );
-    }
-    sendWhatsappAlert(
-      `💰 Payment Verification Requested! ${order.customerDetails.name} claims they paid ₹${order.totalAmount} for Order #${order._id.toString().slice(-8)}.`,
-    ).catch(console.error);
+    // Trigger notifications in the background
+    (async () => {
+      try {
+        const paymentSignalResult = await sendUserClaimsPaidEmail(order);
+        if (!paymentSignalResult?.success) {
+          console.error(`[EMAIL] Failed to send payment-completed admin email for order ${order._id}`);
+        }
+        await sendWhatsappAlert(
+          `💰 Payment Verification Requested! ${order.customerDetails.name} claims they paid ₹${order.totalAmount} for Order #${order._id.toString().slice(-8)}.`,
+        );
+      } catch (bgErr) {
+        console.error(`[BACKGROUND NOTIFY ERROR] order ${order._id}:`, bgErr.message);
+      }
+    })();
 
     return res
       .status(200)
