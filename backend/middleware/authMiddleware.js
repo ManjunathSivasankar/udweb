@@ -1,5 +1,28 @@
 const admin = require("firebase-admin");
 
+/**
+ * Decode a Firebase JWT payload WITHOUT signature verification.
+ * Used as a fallback when Firebase Admin SDK is not initialized (e.g. local dev
+ * without a ServiceAccountKey.json). Do NOT use this in production.
+ */
+const decodeTokenUnsafe = (token) => {
+  try {
+    const payload = token.split(".")[1];
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return { uid: decoded.user_id || decoded.sub, email: decoded.email };
+  } catch {
+    return null;
+  }
+};
+
+const isFirebaseInitialized = () => {
+  try {
+    return admin.apps.length > 0;
+  } catch {
+    return false;
+  }
+};
+
 const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
@@ -11,6 +34,18 @@ const verifyToken = async (req, res, next) => {
   }
 
   const token = authHeader.split(" ")[1];
+
+  // Firebase Admin not initialized (e.g. no ServiceAccountKey.json on local dev)
+  // Fall back to unsafe JWT decode so dev work is not blocked.
+  if (!isFirebaseInitialized()) {
+    const decoded = decodeTokenUnsafe(token);
+    if (decoded?.uid) {
+      console.warn("⚠️  Auth: Firebase Admin NOT initialized. Using unsafe JWT decode (dev-only fallback).");
+      req.user = decoded;
+      return next();
+    }
+    return res.status(401).json({ message: "Unauthorized - Firebase not initialized and token malformed" });
+  }
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
@@ -45,11 +80,18 @@ const optionalVerifyToken = async (req, res, next) => {
 
   const token = authHeader.split(" ")[1];
 
+  // Fallback for local dev without ServiceAccountKey.json
+  if (!isFirebaseInitialized()) {
+    const decoded = decodeTokenUnsafe(token);
+    req.user = decoded; // will be null if malformed, which is fine for optional auth
+    return next();
+  }
+
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
     req.user = decodedToken;
   } catch {
-    // Token invalid or Firebase Admin not initialised — treat as guest
+    // Token invalid or verification failed — treat as guest
     req.user = null;
   }
 

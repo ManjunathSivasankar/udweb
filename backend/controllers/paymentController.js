@@ -1,6 +1,7 @@
 const Order = require("../models/Order");
 const {
   sendOrderInitiatedEmail,
+  sendOrderReceivedEmail,
   sendUserClaimsPaidEmail,
   sendWhatsappAlert,
 } = require("../services/notificationService");
@@ -65,8 +66,24 @@ const initiatePayment = async (req, res) => {
     newOrder.upiLink = upiLink;
     await newOrder.save();
 
-    // Notify Admin
-    sendOrderInitiatedEmail(newOrder).catch(console.error);
+    // Notify admin immediately when a new order is created.
+    const adminEmailResult = await sendOrderInitiatedEmail(newOrder);
+    if (!adminEmailResult?.ok) {
+      console.error(
+        `[EMAIL] Failed to send order-placed admin email for order ${newOrder._id}:`,
+        adminEmailResult?.error || "Unknown error",
+      );
+    }
+
+    // Also notify the customer that we've received their order.
+    const customerEmailResult = await sendOrderReceivedEmail(newOrder);
+    if (!customerEmailResult?.ok) {
+      console.error(
+        `[EMAIL] Failed to send order-received customer email for order ${newOrder._id}:`,
+        customerEmailResult?.error || "Unknown error",
+      );
+    }
+
     sendWhatsappAlert(
       `🆕 New Order #${newOrder._id.toString().slice(-8)} initiated for ₹${totalAmount}. Please check dashboard.`,
     ).catch(console.error);
@@ -95,15 +112,27 @@ const confirmPayment = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
+    // Mark payment as completed once the customer confirms they paid.
+    if (order.status === "Order Placed") {
+      order.status = "Payment Completed";
+      await order.save();
+    }
+
     // Trigger notification to admin
-    sendUserClaimsPaidEmail(order).catch(console.error);
+    const paymentSignalResult = await sendUserClaimsPaidEmail(order);
+    if (!paymentSignalResult?.ok) {
+      console.error(
+        `[EMAIL] Failed to send payment-completed admin email for order ${order._id}:`,
+        paymentSignalResult?.error || "Unknown error",
+      );
+    }
     sendWhatsappAlert(
       `💰 Payment Verification Requested! ${order.customerDetails.name} claims they paid ₹${order.totalAmount} for Order #${order._id.toString().slice(-8)}.`,
     ).catch(console.error);
 
     return res
       .status(200)
-      .json({ message: "Confirmation signal sent to admin." });
+      .json({ message: "Payment completion signal sent to admin." });
   } catch (error) {
     console.error("confirmPayment error:", error);
     return res.status(500).json({

@@ -1,0 +1,18 @@
+{
+  "customerDetails": {
+    "name": "Test User",
+    "email": "test@example.com",
+    "phone": "9999999999"
+  },
+  "shippingAddress": {
+    "address": "123 Test St",
+    "city": "Test City",
+    "state": "TS",
+    "pinCode": "123456"
+  },
+  "items": [],
+  "subtotal": 500,
+  "shippingFee": 50,
+  "totalAmount": 550,
+  "shippingMethod": "Standard"
+}

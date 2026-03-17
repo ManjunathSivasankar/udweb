@@ -82,23 +82,49 @@ const updateOrderStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
-    const order = await Order.findByIdAndUpdate(id, { status }, { new: true });
+    const order = await Order.findById(id);
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // Trigger emails based on new status
+    const previousStatus = order.status;
+    if (previousStatus === status) {
+      return res
+        .status(200)
+        .json({ message: "Order status unchanged", order });
+    }
+
+    order.status = status;
+    await order.save();
+
+    // Trigger customer emails based on new status
+    const {
+      sendOrderConfirmedEmail,
+      sendOrderDispatchedEmail,
+      sendOrderShippedEmail,
+      sendOrderDeliveredEmail,
+      sendOrderCancelledEmail,
+    } = require("../services/notificationService");
+
+    let emailResult;
     if (status === "Order Confirmed") {
-      const {
-        sendOrderConfirmedEmail,
-      } = require("../services/notificationService");
-      sendOrderConfirmedEmail(order).catch(console.error);
+      emailResult = await sendOrderConfirmedEmail(order);
     } else if (status === "Preparing for Dispatch") {
-      const {
-        sendOrderDispatchedEmail,
-      } = require("../services/notificationService");
-      sendOrderDispatchedEmail(order).catch(console.error);
+      emailResult = await sendOrderDispatchedEmail(order);
+    } else if (status === "Shipped") {
+      emailResult = await sendOrderShippedEmail(order);
+    } else if (status === "Delivered") {
+      emailResult = await sendOrderDeliveredEmail(order);
+    } else if (status === "Cancelled") {
+      emailResult = await sendOrderCancelledEmail(order);
+    }
+
+    if (emailResult && !emailResult?.ok) {
+      console.error(
+        `[EMAIL] Failed to send "${status}" email for order ${order._id}:`,
+        emailResult?.error || "Unknown error",
+      );
     }
 
     res.status(200).json({ message: "Order status updated", order });

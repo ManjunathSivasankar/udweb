@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 const ORDER_STAGES = [
-  "Payment Completed",
+  "Order Placed",
   "Order Confirmed",
   "Preparing for Dispatch",
   "Shipped",

@@ -3,7 +3,11 @@ const Product = require("../models/Product");
 // Get all products
 const getProducts = async (req, res) => {
   try {
-    const products = await Product.find();
+    // Optimization: Exclude large fields when listing products to reduce response size
+    const products = await Product.find()
+      .select("-description -specifications")
+      .sort({ createdAt: -1 });
+
     res.status(200).json(products);
   } catch (error) {
     res
