@@ -15,10 +15,10 @@ const getEnv = (key, fallback = "") => {
 
 const BREVO_HOST = getEnv("BREVO_SMTP_HOST", "smtp-relay.brevo.com");
 const BREVO_PORT = Number(getEnv("BREVO_SMTP_PORT", "587"));
-const BREVO_USER = getEnv("BREVO_SMTP_USER");
-const BREVO_KEY = getEnv("BREVO_SMTP_KEY");
-const FROM_EMAIL = getEnv("FROM_EMAIL");
-const ADMIN_EMAIL = getEnv("ADMIN_EMAIL");
+const BREVO_USER = getEnv("BREVO_SMTP_USER") || getEnv("SMTP_USER");
+const BREVO_KEY = getEnv("BREVO_SMTP_KEY") || getEnv("SMTP_PASS");
+const FROM_EMAIL = getEnv("FROM_EMAIL") || getEnv("SMTP_USER");
+const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || getEnv("SMTP_USER");
 
 const createTransporter = () => {
   if (!BREVO_USER || !BREVO_KEY) {
