@@ -43,17 +43,18 @@ const createTransporter = () => {
   if (isGmail) {
     return nodemailer.createTransport({
       ...baseConfig,
-      // Using host/port explicitly for Gmail can sometimes be more stable than the preset
-      // when combined with family: 4 and specific TLS settings
       host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false, // Use STARTTLS on Port 587
       tls: {
         servername: "smtp.gmail.com",
         rejectUnauthorized: false,
-        // Additional TLS flags to help with IPv4 stability
-        minVersion: "TLSv1.2"
-      }
+        minVersion: "TLSv1.2",
+      },
+      // Higher priority for IPv4 + increased timeouts as Render can be slow
+      family: 4,
+      connectionTimeout: 40000,
+      socketTimeout: 50000,
     });
   }
 
@@ -63,7 +64,8 @@ const createTransporter = () => {
     port: smtpPort,
     secure: smtpPort === 465,
     requireTLS: smtpPort === 587,
-    tls: { rejectUnauthorized: false }
+    tls: { rejectUnauthorized: false },
+    family: 4,
   });
 };
 
