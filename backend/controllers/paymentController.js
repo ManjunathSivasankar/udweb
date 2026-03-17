@@ -3,6 +3,7 @@ const {
   sendOrderInitiatedAlert,
   sendOrderReceivedEmail,
   sendStatusUpdateEmail,
+  sendUserClaimsPaidEmail,
   sendWhatsappAlert,
 } = require("../services/notificationService");
 
