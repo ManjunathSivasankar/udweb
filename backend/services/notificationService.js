@@ -1,10 +1,10 @@
-const sgMail = require("@sendgrid/mail");
+const nodemailer = require("nodemailer");
 
 /**
  * notificationService
- * Handles sending emails using SendGrid for production reliability.
- *
- * Requirements: SENDGRID_API_KEY, FROM_EMAIL, ADMIN_EMAIL in .env
+ * Handles sending emails using Brevo (formerly Sendinblue) for production reliability.
+ * 
+ * Requirements: BREVO_SMTP_HOST, BREVO_SMTP_PORT, BREVO_SMTP_USER, BREVO_SMTP_KEY, FROM_EMAIL, ADMIN_EMAIL in .env
  */
 
 const getEnv = (key, fallback = "") => {
@@ -13,46 +13,51 @@ const getEnv = (key, fallback = "") => {
   return value.trim().replace(/^["']|["']$/g, "");
 };
 
-const SENDGRID_API_KEY = getEnv("SENDGRID_API_KEY");
+const BREVO_HOST = getEnv("BREVO_SMTP_HOST", "smtp-relay.brevo.com");
+const BREVO_PORT = Number(getEnv("BREVO_SMTP_PORT", "587"));
+const BREVO_USER = getEnv("BREVO_SMTP_USER");
+const BREVO_KEY = getEnv("BREVO_SMTP_KEY");
 const FROM_EMAIL = getEnv("FROM_EMAIL");
 const ADMIN_EMAIL = getEnv("ADMIN_EMAIL");
 
-if (SENDGRID_API_KEY) {
-  sgMail.setApiKey(SENDGRID_API_KEY);
-  console.log("[EMAIL] SendGrid initialized");
-} else {
-  console.warn("[EMAIL] SENDGRID_API_KEY missing. Email notifications will fail.");
-}
+const createTransporter = () => {
+  if (!BREVO_USER || !BREVO_KEY) {
+    console.warn("[EMAIL] Brevo credentials missing. Email notifications will fail.");
+    return null;
+  }
 
-const hasEmailConfig = () => {
-  return !!SENDGRID_API_KEY && !!FROM_EMAIL;
+  return nodemailer.createTransport({
+    host: BREVO_HOST,
+    port: BREVO_PORT,
+    secure: BREVO_PORT === 465, // Use SSL for 465, TLS/STARTTLS for 587
+    auth: {
+      user: BREVO_USER,
+      pass: BREVO_KEY,
+    },
+    // Force IPv4 to avoid ENETUNREACH on Render's network
+    family: 4,
+  });
 };
 
 const sendEmail = async (mailOptions) => {
-  if (!hasEmailConfig()) {
-    console.warn("[EMAIL] Mail config missing. Skipping send.");
-    return;
-  }
+  const transporter = createTransporter();
+  if (!transporter) return;
 
-  const msg = {
-    to: mailOptions.to,
+  const mailData = {
     from: FROM_EMAIL,
+    to: mailOptions.to,
     subject: mailOptions.subject,
     text: mailOptions.text,
     html: mailOptions.html,
   };
 
   try {
-    console.log("[EMAIL] Sending email to:", msg.to);
-    await sgMail.send(msg);
-    console.log("[EMAIL] Email sent successfully");
+    console.log("[EMAIL] Sending email via Brevo to:", mailData.to);
+    const info = await transporter.sendMail(mailData);
+    console.log("[EMAIL] Email sent successfully:", info.messageId);
     return { success: true };
   } catch (error) {
-    if (error.response && error.response.body) {
-      console.error("[EMAIL ERROR RESPONSE]:", JSON.stringify(error.response.body, null, 2));
-    } else {
-      console.error("[EMAIL ERROR]:", error.message);
-    }
+    console.error("[EMAIL ERROR]:", error.message);
     throw error;
   }
 };
@@ -60,34 +65,34 @@ const sendEmail = async (mailOptions) => {
 const sendOrderInitiatedAlert = async (order) => {
   const emailBody = `
     New Order Received!
-    Order ID: ${order.orderId}
+    Order ID: ${order.orderId || order._id}
     Total Amount: ₹${order.totalAmount}
-    Customer: ${order.shippingAddress.name}
-    Phone: ${order.shippingAddress.phone}
+    Customer: ${order.customerDetails.name}
+    Phone: ${order.customerDetails.phone}
   `;
 
   try {
     await sendEmail({
       to: ADMIN_EMAIL,
-      subject: `New Order Alert: #${order.orderId}`,
+      subject: `New Order Alert: #${order.orderId || order._id}`,
       text: emailBody,
     });
   } catch (error) {
-    console.error(`[EMAIL] Failed to send admin alert for order ${order.orderId}`);
+    console.error(`[EMAIL] Failed to send admin alert for order ${order._id}`);
   }
 };
 
 const sendOrderReceivedEmail = async (order, customerEmail) => {
   const emailBody = `
     Hello ${order.shippingAddress.name},
-    Your order #${order.orderId} has been received and is being processed.
+    Your order #${order.orderId || order._id} has been received and is being processed.
     Total Amount: ₹${order.totalAmount}
   `;
 
   try {
     await sendEmail({
       to: customerEmail,
-      subject: `Order Received: #${order.orderId}`,
+      subject: `Order Received: #${order.orderId || order._id}`,
       text: emailBody,
     });
   } catch (error) {
@@ -98,13 +103,13 @@ const sendOrderReceivedEmail = async (order, customerEmail) => {
 const sendStatusUpdateEmail = async (order, customerEmail, status) => {
   const emailBody = `
     Hello ${order.shippingAddress.name},
-    Your order #${order.orderId} status has been updated to: ${status}.
+    Your order #${order.orderId || order._id} status has been updated to: ${status}.
   `;
 
   try {
     await sendEmail({
       to: customerEmail,
-      subject: `Order Status Update: #${order.orderId}`,
+      subject: `Order Status Update: #${order.orderId || order._id}`,
       text: emailBody,
     });
   } catch (error) {
@@ -112,29 +117,29 @@ const sendStatusUpdateEmail = async (order, customerEmail, status) => {
   }
 };
 
-// Simplified placeholders for missing functions if they were exported
 const verifyEmailConfig = async () => {
-  console.log("[EMAIL] SendGrid config check:", hasEmailConfig() ? "READY" : "MISSING KEY/FROM");
-  return hasEmailConfig();
+  const transporter = createTransporter();
+  if (!transporter) return false;
+  try {
+    await transporter.verify();
+    console.log("[EMAIL] Brevo SMTP connection verified.");
+    return true;
+  } catch (error) {
+    console.error("[EMAIL] Brevo verification failed:", error.message);
+    return false;
+  }
 };
 
 const sendTestEmail = async (to) => {
   return await sendEmail({
     to,
-    subject: "Test Email from SendGrid",
-    text: "This is a test email to verify production SMTP through SendGrid.",
+    subject: "Brevo SMTP Test",
+    text: "This is a test email to verify Brevo SMTP on production.",
   });
 };
 
 const sendMailWithRetry = async (options) => {
-  return await sendEmail({
-    to: options.to,
-    from: FROM_EMAIL,
-    replyTo: FROM_EMAIL,
-    subject: options.subject,
-    text: options.text || options.subject,
-    html: options.html
-  });
+  return await sendEmail(options);
 };
 
 module.exports = {
@@ -145,6 +150,7 @@ module.exports = {
   sendTestEmail,
   sendMailWithRetry
 };
+
 
   const adminPhone = process.env.ADMIN_PHONE;
   // We encourage using a simple HTTP API gateway for WhatsApp (like CallMeBot)
