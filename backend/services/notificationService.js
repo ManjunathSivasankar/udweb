@@ -1,10 +1,10 @@
-const nodemailer = require("nodemailer");
+const sgMail = require("@sendgrid/mail");
 
 /**
  * notificationService
- * Handles sending emails to the admin for order events.
+ * Handles sending emails using SendGrid for production reliability.
  *
- * Requirements: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, ADMIN_EMAIL in .env
+ * Requirements: SENDGRID_API_KEY, FROM_EMAIL, ADMIN_EMAIL in .env
  */
 
 const getEnv = (key, fallback = "") => {
@@ -13,141 +13,139 @@ const getEnv = (key, fallback = "") => {
   return value.trim().replace(/^["']|["']$/g, "");
 };
 
-const getSmtpPort = () => {
-  const parsed = Number(getEnv("SMTP_PORT", "587"));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 587;
+const SENDGRID_API_KEY = getEnv("SENDGRID_API_KEY");
+const FROM_EMAIL = getEnv("FROM_EMAIL");
+const ADMIN_EMAIL = getEnv("ADMIN_EMAIL");
+
+if (SENDGRID_API_KEY) {
+  sgMail.setApiKey(SENDGRID_API_KEY);
+  console.log("[EMAIL] SendGrid initialized");
+} else {
+  console.warn("[EMAIL] SENDGRID_API_KEY missing. Email notifications will fail.");
+}
+
+const hasEmailConfig = () => {
+  return !!SENDGRID_API_KEY && !!FROM_EMAIL;
 };
 
-const createTransporter = () => {
-  const smtpPort = getSmtpPort();
-  const smtpPass = getEnv("SMTP_PASS").replace(/\s+/g, "");
-
-  const host = getEnv("SMTP_HOST").toLowerCase();
-  const user = getEnv("SMTP_USER").toLowerCase();
-  const isGmail = host.includes("gmail") || user.endsWith("@gmail.com");
-
-  // Base configuration that forces IPv4
-  const baseConfig = {
-    auth: {
-      user: getEnv("SMTP_USER"),
-      pass: smtpPass,
-    },
-    // CRITICAL: Force IPv4 as first priority to fix ENETUNREACH on Render
-    family: 4,
-    connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 30000),
-    greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 20000),
-    socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 45000),
-    dnsTimeout: 10000,
-  };
-
-  if (isGmail) {
-    return nodemailer.createTransport({
-      ...baseConfig,
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false, // Use STARTTLS on Port 587
-      tls: {
-        servername: "smtp.gmail.com",
-        rejectUnauthorized: false,
-        minVersion: "TLSv1.2",
-      },
-      // Higher priority for IPv4 + increased timeouts as Render can be slow
-      family: 4,
-      connectionTimeout: 40000,
-      socketTimeout: 50000,
-    });
+const sendEmail = async (mailOptions) => {
+  if (!hasEmailConfig()) {
+    console.warn("[EMAIL] Mail config missing. Skipping send.");
+    return;
   }
 
-  return nodemailer.createTransport({
-    ...baseConfig,
-    host: getEnv("SMTP_HOST"),
-    port: smtpPort,
-    secure: smtpPort === 465,
-    requireTLS: smtpPort === 587,
-    tls: { rejectUnauthorized: false },
-    family: 4,
+  const msg = {
+    to: mailOptions.to,
+    from: FROM_EMAIL,
+    subject: mailOptions.subject,
+    text: mailOptions.text,
+    html: mailOptions.html,
+  };
+
+  try {
+    console.log("[EMAIL] Sending email to:", msg.to);
+    await sgMail.send(msg);
+    console.log("[EMAIL] Email sent successfully");
+    return { success: true };
+  } catch (error) {
+    if (error.response && error.response.body) {
+      console.error("[EMAIL ERROR RESPONSE]:", JSON.stringify(error.response.body, null, 2));
+    } else {
+      console.error("[EMAIL ERROR]:", error.message);
+    }
+    throw error;
+  }
+};
+
+const sendOrderInitiatedAlert = async (order) => {
+  const emailBody = `
+    New Order Received!
+    Order ID: ${order.orderId}
+    Total Amount: ₹${order.totalAmount}
+    Customer: ${order.shippingAddress.name}
+    Phone: ${order.shippingAddress.phone}
+  `;
+
+  try {
+    await sendEmail({
+      to: ADMIN_EMAIL,
+      subject: `New Order Alert: #${order.orderId}`,
+      text: emailBody,
+    });
+  } catch (error) {
+    console.error(`[EMAIL] Failed to send admin alert for order ${order.orderId}`);
+  }
+};
+
+const sendOrderReceivedEmail = async (order, customerEmail) => {
+  const emailBody = `
+    Hello ${order.shippingAddress.name},
+    Your order #${order.orderId} has been received and is being processed.
+    Total Amount: ₹${order.totalAmount}
+  `;
+
+  try {
+    await sendEmail({
+      to: customerEmail,
+      subject: `Order Received: #${order.orderId}`,
+      text: emailBody,
+    });
+  } catch (error) {
+    console.error(`[EMAIL] Failed to send confirmation email to ${customerEmail}`);
+  }
+};
+
+const sendStatusUpdateEmail = async (order, customerEmail, status) => {
+  const emailBody = `
+    Hello ${order.shippingAddress.name},
+    Your order #${order.orderId} status has been updated to: ${status}.
+  `;
+
+  try {
+    await sendEmail({
+      to: customerEmail,
+      subject: `Order Status Update: #${order.orderId}`,
+      text: emailBody,
+    });
+  } catch (error) {
+    console.error(`[EMAIL] Failed to send status update to ${customerEmail}`);
+  }
+};
+
+// Simplified placeholders for missing functions if they were exported
+const verifyEmailConfig = async () => {
+  console.log("[EMAIL] SendGrid config check:", hasEmailConfig() ? "READY" : "MISSING KEY/FROM");
+  return hasEmailConfig();
+};
+
+const sendTestEmail = async (to) => {
+  return await sendEmail({
+    to,
+    subject: "Test Email from SendGrid",
+    text: "This is a test email to verify production SMTP through SendGrid.",
   });
 };
 
-const getTransporter = () => {
-  // Always create a fresh transporter to avoid stale/broken cached connections.
-  return createTransporter();
+const sendMailWithRetry = async (options) => {
+  return await sendEmail({
+    to: options.to,
+    from: FROM_EMAIL,
+    replyTo: FROM_EMAIL,
+    subject: options.subject,
+    text: options.text || options.subject,
+    html: options.html
+  });
 };
 
-const hasSmtpConfig = () => {
-  const user = getEnv("SMTP_USER");
-  const pass = getEnv("SMTP_PASS");
-  const host = getEnv("SMTP_HOST");
-  const isGmail = host.toLowerCase().includes("gmail") || user.toLowerCase().endsWith("@gmail.com");
-
-  const missing = [];
-  if (!user) missing.push("SMTP_USER");
-  if (!pass) missing.push("SMTP_PASS");
-  // Host can be omitted for Gmail, but is required for other SMTP providers.
-  if (!isGmail && !host) missing.push("SMTP_HOST");
-
-  if (missing.length > 0) {
-    console.warn(
-      `[EMAIL] Missing SMTP environment variables: ${missing.join(", ")}. Email notifications are disabled.`,
-    );
-    return false;
-  }
-
-  return true;
+module.exports = {
+  sendOrderInitiatedAlert,
+  sendOrderReceivedEmail,
+  sendStatusUpdateEmail,
+  verifyEmailConfig,
+  sendTestEmail,
+  sendMailWithRetry
 };
 
-const getFromAddress = () => {
-  return getEnv("SMTP_FROM_EMAIL") || getEnv("SMTP_USER");
-};
-
-const sendMailWithRetry = async (mailOptions, label = "email") => {
-  const maxAttempts = 2;
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      const transporter = getTransporter();
-      return await transporter.sendMail(mailOptions);
-    } catch (error) {
-      lastError = error;
-      const transientCodes = ["ETIMEDOUT", "ECONNECTION", "ESOCKET", "ECONNRESET"];
-      const shouldRetry = transientCodes.includes(error?.code) && attempt < maxAttempts;
-      console.error(
-        `[EMAIL] ${label} send attempt ${attempt} failed:`,
-        error?.code || error?.message,
-      );
-      if (!shouldRetry) break;
-    }
-  }
-
-  throw lastError;
-};
-
-// Verify transporter on startup
-const verifyConnection = async () => {
-  if (!hasSmtpConfig()) return;
-
-  const transporter = getTransporter();
-  try {
-    await transporter.verify();
-    console.log("[EMAIL] SMTP server is ready to send messages");
-    console.log(
-      `[EMAIL] Config: host=${getEnv("SMTP_HOST") || "(auto)"} port=${getSmtpPort()} user=${getEnv("SMTP_USER")}`,
-    );
-  } catch (error) {
-    console.error("[EMAIL] SMTP verification error:", error.message);
-    console.error("[EMAIL] Error code:", error.code);
-    console.error(
-      `[EMAIL] Config: host=${getEnv("SMTP_HOST") || "(auto)"} port=${getSmtpPort()} user=${getEnv("SMTP_USER")} passSet=${!!getEnv("SMTP_PASS")}`,
-    );
-    console.error(
-      "[EMAIL] Check deployment env vars, SMTP credentials, firewall/port access, and provider security settings.",
-    );
-  }
-};
-verifyConnection();
-
-const sendWhatsappAlert = async (message) => {
   const adminPhone = process.env.ADMIN_PHONE;
   // We encourage using a simple HTTP API gateway for WhatsApp (like CallMeBot)
   // Example URL in .env: https://api.callmebot.com/whatsapp.php?phone=[phone]&apikey=[key]&text=[text]

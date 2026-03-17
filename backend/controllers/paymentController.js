@@ -1,8 +1,8 @@
 const Order = require("../models/Order");
 const {
-  sendOrderInitiatedEmail,
+  sendOrderInitiatedAlert,
   sendOrderReceivedEmail,
-  sendUserClaimsPaidEmail,
+  sendStatusUpdateEmail,
   sendWhatsappAlert,
 } = require("../services/notificationService");
 
@@ -66,22 +66,23 @@ const initiatePayment = async (req, res) => {
     newOrder.upiLink = upiLink;
     await newOrder.save();
 
+    console.log("[PAYMENT] Order created and UPI link generated:", newOrder._id);
+
     // Notify admin immediately when a new order is created.
-    const adminEmailResult = await sendOrderInitiatedEmail(newOrder);
-    if (!adminEmailResult?.ok) {
-      console.error(
-        `[EMAIL] Failed to send order-placed admin email for order ${newOrder._id}:`,
-        adminEmailResult?.error || "Unknown error",
-      );
+    try {
+      await sendOrderInitiatedAlert(newOrder);
+      console.log("[EMAIL] Admin alert sent for order:", newOrder._id);
+    } catch (emailErr) {
+      console.error(`[EMAIL ERROR] Admin alert failed for order ${newOrder._id}:`, emailErr.message);
     }
 
     // Also notify the customer that we've received their order.
-    const customerEmailResult = await sendOrderReceivedEmail(newOrder);
-    if (!customerEmailResult?.ok) {
-      console.error(
-        `[EMAIL] Failed to send order-received customer email for order ${newOrder._id}:`,
-        customerEmailResult?.error || "Unknown error",
-      );
+    try {
+      const customerEmail = newOrder.customerDetails.email;
+      await sendOrderReceivedEmail(newOrder, customerEmail);
+      console.log("[EMAIL] Customer confirmation sent to:", customerEmail);
+    } catch (emailErr) {
+      console.error(`[EMAIL ERROR] Customer confirmation failed for order ${newOrder._id}:`, emailErr.message);
     }
 
     sendWhatsappAlert(

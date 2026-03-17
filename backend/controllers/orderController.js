@@ -100,31 +100,16 @@ const updateOrderStatus = async (req, res) => {
 
     // Trigger customer emails based on new status
     const {
-      sendOrderConfirmedEmail,
-      sendOrderDispatchedEmail,
-      sendOrderShippedEmail,
-      sendOrderDeliveredEmail,
-      sendOrderCancelledEmail,
+      sendStatusUpdateEmail,
     } = require("../services/notificationService");
 
-    let emailResult;
-    if (status === "Order Confirmed") {
-      emailResult = await sendOrderConfirmedEmail(order);
-    } else if (status === "Preparing for Dispatch") {
-      emailResult = await sendOrderDispatchedEmail(order);
-    } else if (status === "Shipped") {
-      emailResult = await sendOrderShippedEmail(order);
-    } else if (status === "Delivered") {
-      emailResult = await sendOrderDeliveredEmail(order);
-    } else if (status === "Cancelled") {
-      emailResult = await sendOrderCancelledEmail(order);
-    }
-
-    if (emailResult && !emailResult?.ok) {
-      console.error(
-        `[EMAIL] Failed to send "${status}" email for order ${order._id}:`,
-        emailResult?.error || "Unknown error",
-      );
+    try {
+      if (order.customerDetails && order.customerDetails.email) {
+        await sendStatusUpdateEmail(order, order.customerDetails.email, status);
+        console.log(`[EMAIL] Status update (${status}) sent to:`, order.customerDetails.email);
+      }
+    } catch (emailErr) {
+      console.error(`[EMAIL ERROR] Status update failed for order ${order._id}:`, emailErr.message);
     }
 
     res.status(200).json({ message: "Order status updated", order });
