@@ -20,49 +20,50 @@ const getSmtpPort = () => {
 
 const createTransporter = () => {
   const smtpPort = getSmtpPort();
-  // Gmail app passwords are commonly copied with spaces; remove them safely.
   const smtpPass = getEnv("SMTP_PASS").replace(/\s+/g, "");
 
-  // Gmail: use the built-in service preset (port 465 SSL) which is
-  // allowed on virtually all cloud hosting platforms.
-  // Manual port 587 / requireTLS is frequently blocked by providers.
   const host = getEnv("SMTP_HOST").toLowerCase();
   const user = getEnv("SMTP_USER").toLowerCase();
   const isGmail = host.includes("gmail") || user.endsWith("@gmail.com");
 
-  if (isGmail) {
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: getEnv("SMTP_USER"),
-        pass: smtpPass,
-      },
-      tls: {
-        servername: "smtp.gmail.com",
-        rejectUnauthorized: false,
-      },
-      // Prefer IPv4 in hosted environments where IPv6 routes can stall.
-      family: 4,
-      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 20000),
-      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 15000),
-      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 30000),
-    });
-  }
-
-  return nodemailer.createTransport({
-    host: getEnv("SMTP_HOST"),
-    port: smtpPort,
-    secure: smtpPort === 465,
-    requireTLS: smtpPort === 587,
+  // Base configuration that forces IPv4
+  const baseConfig = {
     auth: {
       user: getEnv("SMTP_USER"),
       pass: smtpPass,
     },
-    tls: { rejectUnauthorized: false },
-    family: 4, // Force IPv4 for generic SMTP as well to prevent routing issues
-    connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 20000),
-    greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 15000),
-    socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 30000),
+    // CRITICAL: Force IPv4 as first priority to fix ENETUNREACH on Render
+    family: 4,
+    connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT || 30000),
+    greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT || 20000),
+    socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT || 45000),
+    dnsTimeout: 10000,
+  };
+
+  if (isGmail) {
+    return nodemailer.createTransport({
+      ...baseConfig,
+      // Using host/port explicitly for Gmail can sometimes be more stable than the preset
+      // when combined with family: 4 and specific TLS settings
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      tls: {
+        servername: "smtp.gmail.com",
+        rejectUnauthorized: false,
+        // Additional TLS flags to help with IPv4 stability
+        minVersion: "TLSv1.2"
+      }
+    });
+  }
+
+  return nodemailer.createTransport({
+    ...baseConfig,
+    host: getEnv("SMTP_HOST"),
+    port: smtpPort,
+    secure: smtpPort === 465,
+    requireTLS: smtpPort === 587,
+    tls: { rejectUnauthorized: false }
   });
 };
 
