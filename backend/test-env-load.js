@@ -41,9 +41,7 @@ keysToCheck.forEach(key => {
   }
 });
 
-// TEMPORARY: Hardcoding API key for debugging
-// REPLACE "REPLACE_WITH_REAL_API_KEY" with your actual xkeysib-... key
-const API_KEY = "xkeysib-REPLACE_WITH_REAL_API_KEY" || envValues["BREVO_API_KEY"] || envValues["BREVO_SMTP_KEY"];
+const API_KEY = envValues["BREVO_API_KEY"] || envValues["BREVO_SMTP_KEY"];
 
 if (API_KEY) {
   console.log("\n--- Testing API Connectivity ---");
