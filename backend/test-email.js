@@ -1,6 +1,6 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
-const { sendOrderInitiatedEmail, sendOrderConfirmedEmail } = require("./services/notificationService");
+const { sendOrderInitiatedAlert, sendOrderConfirmedEmail } = require("./services/notificationService");
 const Order = require("./models/Order");
 
 async function test() {
@@ -16,7 +16,7 @@ async function test() {
     }
     
     console.log("Testing Order Initiated Email...");
-    const res1 = await sendOrderInitiatedEmail(order);
+    const res1 = await sendOrderInitiatedAlert(order);
     console.log("Initiated Result:", res1);
     
     console.log("Testing Order Confirmed Email...");

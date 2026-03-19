@@ -122,29 +122,42 @@ app.use("/api/payment", require("./routes/paymentRoutes"));
 app.get("/", (req, res) => res.send("API Regular"));
 
 // GET /api/health/email  – diagnose SMTP config from production
-// Protect with a HEALTH_TOKEN env var to avoid exposing config publicly
 app.get("/api/health/email", async (req, res) => {
-  const token = req.query.token || req.headers["x-health-token"];
-  if (!process.env.HEALTH_TOKEN || token !== process.env.HEALTH_TOKEN) {
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
-  }
+  try {
+    const token = req.query.token || req.headers["x-health-token"];
+    if (!process.env.HEALTH_TOKEN || token !== process.env.HEALTH_TOKEN) {
+      return res.status(401).json({ ok: false, error: "Unauthorized" });
+    }
 
-  const { verifyEmailConfig } = require("./services/notificationService");
-  const result = await verifyEmailConfig();
-  res.status(result.ok ? 200 : 500).json(result);
+    const { verifyEmailConfig } = require("./services/notificationService");
+    const result = await verifyEmailConfig();
+    res.status(result.ok ? 200 : 500).json(result);
+  } catch (error) {
+    console.error("[HEALTH CHECK ERROR]:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 // POST /api/health/email/test?token=...&to=...  – send test email from production
 app.post("/api/health/email/test", async (req, res) => {
-  const token = req.query.token || req.headers["x-health-token"];
-  if (!process.env.HEALTH_TOKEN || token !== process.env.HEALTH_TOKEN) {
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
-  }
+  try {
+    const token = req.query.token || req.headers["x-health-token"];
+    if (!process.env.HEALTH_TOKEN || token !== process.env.HEALTH_TOKEN) {
+      return res.status(401).json({ ok: false, error: "Unauthorized" });
+    }
 
-  const to = req.query.to || req.body?.to;
-  const { sendTestEmail } = require("./services/notificationService");
-  const result = await sendTestEmail(to);
-  res.status(result.ok ? 200 : 500).json(result);
+    const to = req.query.to || req.body?.to;
+    if (!to) {
+      return res.status(400).json({ ok: false, error: "Recipient email (to) is required" });
+    }
+
+    const { sendTestEmail } = require("./services/notificationService");
+    const result = await sendTestEmail(to);
+    res.status(result.ok ? 200 : 500).json(result);
+  } catch (error) {
+    console.error("[TEST EMAIL ERROR]:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 const PORT = process.env.PORT || 5000;

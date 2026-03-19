@@ -16,7 +16,7 @@ const getEnv = (key, fallback = "") => {
 const BREVO_HOST = getEnv("BREVO_SMTP_HOST", "smtp-relay.brevo.com");
 const BREVO_PORT = Number(getEnv("BREVO_SMTP_PORT", "587"));
 const BREVO_USER = getEnv("BREVO_SMTP_USER") || getEnv("SMTP_USER");
-const BREVO_KEY = getEnv("BREVO_SMTP_KEY") || getEnv("SMTP_PASS");
+const BREVO_KEY = getEnv("BREVO_SMTP_KEY") || getEnv("BREVO_API_KEY") || getEnv("SMTP_PASS");
 const FROM_EMAIL = getEnv("FROM_EMAIL") || getEnv("SMTP_USER");
 const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || getEnv("SMTP_USER");
 
@@ -58,9 +58,10 @@ const sendEmail = async (mailOptions) => {
     console.log("[EMAIL] Sending email via Brevo to:", mailData.to);
     const info = await transporter.sendMail(mailData);
     console.log("[EMAIL] Email sent successfully:", info.messageId);
-    return { success: true };
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("[EMAIL ERROR]:", error.message);
+    console.error("[EMAIL ERROR FULL]:", error);
+    console.error("[EMAIL ERROR MESSAGE]:", error.message);
     throw error;
   }
 };
@@ -122,23 +123,28 @@ const sendStatusUpdateEmail = async (order, customerEmail, status) => {
 
 const verifyEmailConfig = async () => {
   const transporter = createTransporter();
-  if (!transporter) return false;
+  if (!transporter) return { ok: false, error: "Transporter not created (credentials missing?)" };
   try {
     await transporter.verify();
     console.log("[EMAIL] Brevo SMTP connection verified.");
-    return true;
+    return { ok: true };
   } catch (error) {
     console.error("[EMAIL] Brevo verification failed:", error.message);
-    return false;
+    return { ok: false, error: error.message };
   }
 };
 
 const sendTestEmail = async (to) => {
-  return await sendEmail({
-    to,
-    subject: "Brevo SMTP Test",
-    text: "This is a test email to verify Brevo SMTP on production.",
-  });
+  try {
+    const result = await sendEmail({
+      to,
+      subject: "Brevo SMTP Test",
+      text: "This is a test email to verify Brevo SMTP on production.",
+    });
+    return { ok: true, info: result };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
 };
 
 const sendMailWithRetry = async (options) => {
