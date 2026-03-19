@@ -1,10 +1,10 @@
-const nodemailer = require("nodemailer");
+const SibApiV3Sdk = require("sib-api-v3-sdk");
 
 /**
  * notificationService
- * Handles sending emails using Brevo (formerly Sendinblue) for production reliability.
+ * Handles sending emails using Brevo (formerly Sendinblue) API for production reliability.
  * 
- * Requirements: BREVO_SMTP_HOST, BREVO_SMTP_PORT, BREVO_SMTP_USER, BREVO_SMTP_KEY, FROM_EMAIL, ADMIN_EMAIL in .env
+ * Requirements: BREVO_API_KEY, FROM_EMAIL, ADMIN_EMAIL in .env
  */
 
 const getEnv = (key, fallback = "") => {
@@ -13,54 +13,36 @@ const getEnv = (key, fallback = "") => {
   return value.trim().replace(/^["']|["']$/g, "");
 };
 
-const BREVO_HOST = getEnv("BREVO_SMTP_HOST", "smtp-relay.brevo.com");
-const BREVO_PORT = Number(getEnv("BREVO_SMTP_PORT", "587"));
-const BREVO_USER = getEnv("BREVO_SMTP_USER") || getEnv("SMTP_USER");
-const BREVO_KEY = getEnv("BREVO_SMTP_KEY") || getEnv("BREVO_API_KEY") || getEnv("SMTP_PASS");
+// Initialize Brevo API
+const BREVO_API_KEY = getEnv("BREVO_API_KEY") || getEnv("BREVO_SMTP_KEY") || getEnv("SMTP_PASS");
 const FROM_EMAIL = getEnv("FROM_EMAIL") || getEnv("SMTP_USER");
 const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || getEnv("SMTP_USER");
 
-const createTransporter = () => {
-  if (!BREVO_USER || !BREVO_KEY) {
-    console.warn("[EMAIL] Brevo credentials missing. Email notifications will fail.");
-    return null;
-  }
+const defaultClient = SibApiV3Sdk.ApiClient.instance;
+const apiKey = defaultClient.authentications['api-key'];
+apiKey.apiKey = BREVO_API_KEY;
 
-  return nodemailer.createTransport({
-    host: BREVO_HOST,
-    port: BREVO_PORT,
-    secure: BREVO_PORT === 465,
-    auth: {
-      user: BREVO_USER,
-      pass: BREVO_KEY,
-    },
-    // Force IPv4 and increase timeouts for Render network stability
-    family: 4,
-    connectionTimeout: 30000, // 30 seconds to establish connection
-    greetingTimeout: 20000,   // 20 seconds to wait for SMTP greeting
-    socketTimeout: 45000,     // 45 seconds for data transmission
-  });
-};
+const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
 const sendEmail = async (mailOptions) => {
-  const transporter = createTransporter();
-  if (!transporter) return;
+  if (!BREVO_API_KEY) {
+    console.warn("[EMAIL] Brevo API Key missing. Email notifications will fail.");
+    return { ok: false, error: "API Key missing" };
+  }
 
-  const mailData = {
-    from: FROM_EMAIL,
-    to: mailOptions.to,
-    subject: mailOptions.subject,
-    text: mailOptions.text,
-    html: mailOptions.html,
-  };
+  const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+  sendSmtpEmail.subject = mailOptions.subject;
+  sendSmtpEmail.htmlContent = mailOptions.html || mailOptions.text;
+  sendSmtpEmail.sender = { email: FROM_EMAIL, name: "UrbanDos" };
+  sendSmtpEmail.to = [{ email: mailOptions.to }];
 
   try {
-    console.log("[EMAIL] Sending email via Brevo to:", mailData.to);
-    const info = await transporter.sendMail(mailData);
-    console.log("[EMAIL] Email sent successfully:", info.messageId);
-    return { success: true, messageId: info.messageId };
+    console.log("[EMAIL] Sending email via Brevo API to:", mailOptions.to);
+    const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log("[EMAIL] API call successful. Message ID:", data.messageId);
+    return { success: true, messageId: data.messageId };
   } catch (error) {
-    console.error("[EMAIL ERROR FULL]:", error);
+    console.error("[EMAIL ERROR FULL]:", error.response ? error.response.body : error);
     console.error("[EMAIL ERROR MESSAGE]:", error.message);
     throw error;
   }
@@ -68,18 +50,20 @@ const sendEmail = async (mailOptions) => {
 
 const sendOrderInitiatedAlert = async (order) => {
   const emailBody = `
-    New Order Received!
-    Order ID: ${order.orderId || order._id}
-    Total Amount: ₹${order.totalAmount}
-    Customer: ${order.customerDetails.name}
-    Phone: ${order.customerDetails.phone}
+    <div style="font-family: sans-serif; line-height: 1.6;">
+      <h2>New Order Received!</h2>
+      <p><strong>Order ID:</strong> ${order.orderId || order._id}</p>
+      <p><strong>Total Amount:</strong> ₹${order.totalAmount}</p>
+      <p><strong>Customer:</strong> ${order.customerDetails.name}</p>
+      <p><strong>Phone:</strong> ${order.customerDetails.phone}</p>
+    </div>
   `;
 
   try {
     await sendEmail({
       to: ADMIN_EMAIL,
       subject: `New Order Alert: #${order.orderId || order._id}`,
-      text: emailBody,
+      html: emailBody,
     });
   } catch (error) {
     console.error(`[EMAIL] Failed to send admin alert for order ${order._id}`);
@@ -88,16 +72,19 @@ const sendOrderInitiatedAlert = async (order) => {
 
 const sendOrderReceivedEmail = async (order, customerEmail) => {
   const emailBody = `
-    Hello ${order.shippingAddress.name},
-    Your order #${order.orderId || order._id} has been received and is being processed.
-    Total Amount: ₹${order.totalAmount}
+    <div style="font-family: sans-serif; line-height: 1.6;">
+      <h2>Hello ${order.shippingAddress.name},</h2>
+      <p>Your order <strong>#${order.orderId || order._id}</strong> has been received and is being processed.</p>
+      <p><strong>Total Amount:</strong> ₹${order.totalAmount}</p>
+      <p>Thank you for shopping with UrbanDos!</p>
+    </div>
   `;
 
   try {
     await sendEmail({
       to: customerEmail,
       subject: `Order Received: #${order.orderId || order._id}`,
-      text: emailBody,
+      html: emailBody,
     });
   } catch (error) {
     console.error(`[EMAIL] Failed to send confirmation email to ${customerEmail}`);
@@ -106,15 +93,17 @@ const sendOrderReceivedEmail = async (order, customerEmail) => {
 
 const sendStatusUpdateEmail = async (order, customerEmail, status) => {
   const emailBody = `
-    Hello ${order.shippingAddress.name},
-    Your order #${order.orderId || order._id} status has been updated to: ${status}.
+    <div style="font-family: sans-serif; line-height: 1.6;">
+      <h2>Hello ${order.shippingAddress.name},</h2>
+      <p>Your order <strong>#${order.orderId || order._id}</strong> status has been updated to: <strong>${status}</strong>.</p>
+    </div>
   `;
 
   try {
     await sendEmail({
       to: customerEmail,
       subject: `Order Status Update: #${order.orderId || order._id}`,
-      text: emailBody,
+      html: emailBody,
     });
   } catch (error) {
     console.error(`[EMAIL] Failed to send status update to ${customerEmail}`);
@@ -122,14 +111,15 @@ const sendStatusUpdateEmail = async (order, customerEmail, status) => {
 };
 
 const verifyEmailConfig = async () => {
-  const transporter = createTransporter();
-  if (!transporter) return { ok: false, error: "Transporter not created (credentials missing?)" };
+  if (!BREVO_API_KEY) return { ok: false, error: "API Key missing" };
+  
   try {
-    await transporter.verify();
-    console.log("[EMAIL] Brevo SMTP connection verified.");
+    const accountApi = new SibApiV3Sdk.AccountApi();
+    await accountApi.getAccount();
+    console.log("[EMAIL] Brevo API connection verified.");
     return { ok: true };
   } catch (error) {
-    console.error("[EMAIL] Brevo verification failed:", error.message);
+    console.error("[EMAIL] Brevo API verification failed:", error.message);
     return { ok: false, error: error.message };
   }
 };
@@ -138,8 +128,9 @@ const sendTestEmail = async (to) => {
   try {
     const result = await sendEmail({
       to,
-      subject: "Brevo SMTP Test",
-      text: "This is a test email to verify Brevo SMTP on production.",
+      subject: "Brevo API Test",
+      text: "This is a test email to verify Brevo API on production.",
+      html: "<h3>This is a test email to verify Brevo API on production.</h3>"
     });
     return { ok: true, info: result };
   } catch (error) {
@@ -158,11 +149,9 @@ module.exports = {
   verifyEmailConfig,
   sendTestEmail,
   sendMailWithRetry,
-  // Payment confirmation (Success)
   sendOrderConfirmedEmail: async (order) => {
     return await sendStatusUpdateEmail(order, order.customerDetails.email, "Confirmed");
   },
-  // Placeholders for other status updates if needed by other controllers
   sendOrderDispatchedEmail: async (order) => {
     return await sendStatusUpdateEmail(order, order.customerDetails.email, "Dispatched");
   },
@@ -176,7 +165,6 @@ module.exports = {
     return await sendStatusUpdateEmail(order, order.customerDetails.email, "Cancelled");
   },
   sendUserClaimsPaidEmail: async (order) => {
-    // This was used when a customer clicks "I have paid"
     return await sendEmail({
       to: ADMIN_EMAIL,
       subject: `✅ Payment Claimed - Order #${order.orderId || order._id}`,

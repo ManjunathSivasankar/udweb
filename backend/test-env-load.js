@@ -7,36 +7,44 @@ const getEnv = (key, fallback = "") => {
 };
 
 const keysToCheck = [
-  "BREVO_SMTP_HOST",
-  "BREVO_SMTP_PORT",
-  "BREVO_SMTP_USER",
-  "BREVO_SMTP_KEY",
   "BREVO_API_KEY",
-  "SMTP_USER",
-  "SMTP_PASS",
+  "BREVO_SMTP_KEY",
   "FROM_EMAIL",
-  "ADMIN_EMAIL"
+  "ADMIN_EMAIL",
+  "HEALTH_TOKEN"
 ];
 
-console.log("--- Environment Variable Check ---");
+const deprecatedKeys = [
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_USER",
+  "SMTP_PASS"
+];
+
+console.log("--- Brevo API Environment Check ---");
 keysToCheck.forEach(key => {
   const rawValue = process.env[key];
   const processedValue = getEnv(key);
   
   if (rawValue === undefined) {
-    console.log(`${key}: [UNDEFINED]`);
+    console.log(`${key}: [MISSING ❌]`);
   } else {
-    // Mask sensitive keys
-    const isSensitive = key.includes("KEY") || key.includes("PASS") || key.includes("USER");
+    const isSensitive = key.includes("KEY") || key.includes("TOKEN");
     const displayValue = isSensitive ? "********" : processedValue;
-    console.log(`${key}: ${displayValue} (Raw length: ${rawValue.length})`);
+    console.log(`${key}: ${displayValue} (Raw length: ${rawValue.length}) [OK ✅]`);
     
-    if (rawValue.startsWith('"') || rawValue.endsWith('"') || rawValue.startsWith("'") || rawValue.endsWith("'")) {
-      console.log(`  [WARNING] ${key} has quotes in raw value! Handled by getEnv: ${processedValue === rawValue ? "NO" : "YES"}`);
+    if (processedValue !== rawValue) {
+      console.log(`  [INFO] ${key} had quotes or whitespace that were trimmed.`);
     }
-    if (rawValue.trim() !== rawValue) {
-      console.log(`  [WARNING] ${key} has leading/trailing whitespace in raw value! Handled by getEnv: ${processedValue === rawValue ? "NO" : "YES"}`);
-    }
+  }
+});
+
+console.log("\n--- Deprecated SMTP Keys (No longer needed) ---");
+deprecatedKeys.forEach(key => {
+  if (process.env[key]) {
+    console.log(`${key}: [PRESENT] (Safe to remove from Render)`);
+  } else {
+    console.log(`${key}: [ABSENT]`);
   }
 });
 console.log("----------------------------------");
