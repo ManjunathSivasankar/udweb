@@ -18,6 +18,17 @@ const BREVO_API_KEY = getEnv("BREVO_API_KEY") || getEnv("BREVO_SMTP_KEY") || get
 const FROM_EMAIL = getEnv("FROM_EMAIL") || getEnv("SMTP_USER");
 const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || getEnv("SMTP_USER");
 
+// DEBUG LOGS (Masked)
+if (BREVO_API_KEY) {
+  const maskedKey = BREVO_API_KEY.substring(0, 10) + "..." + BREVO_API_KEY.substring(BREVO_API_KEY.length - 4);
+  console.log(`[EMAIL DEBUG] Loaded Key: ${maskedKey} (Length: ${BREVO_API_KEY.length})`);
+  if (!BREVO_API_KEY.startsWith("xkeysib-")) {
+    console.warn("[EMAIL DEBUG] WARNING: API Key does not start with 'xkeysib-'.");
+  }
+} else {
+  console.error("[EMAIL DEBUG] ERROR: BREVO_API_KEY is missing/empty.");
+}
+
 const defaultClient = SibApiV3Sdk.ApiClient.instance;
 const apiKey = defaultClient.authentications['api-key'];
 apiKey.apiKey = BREVO_API_KEY;
@@ -38,12 +49,21 @@ const sendEmail = async (mailOptions) => {
 
   try {
     console.log("[EMAIL] Sending email via Brevo API to:", mailOptions.to);
+    
+    // Ensure API Key is assigned just before call (double-check singleton state)
+    if (apiKey.apiKey !== BREVO_API_KEY) {
+      apiKey.apiKey = BREVO_API_KEY;
+    }
+
     const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
     console.log("[EMAIL] API call successful. Message ID:", data.messageId);
     return { success: true, messageId: data.messageId };
   } catch (error) {
     console.error("[EMAIL ERROR FULL]:", error.response ? error.response.body : error);
     console.error("[EMAIL ERROR MESSAGE]:", error.message);
+    if (error.response && error.response.body) {
+      console.error("[EMAIL ERROR CODE]:", error.response.body.code);
+    }
     throw error;
   }
 };
