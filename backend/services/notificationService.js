@@ -19,16 +19,18 @@ const transporter = nodemailer.createTransport({
   port: SMTP_PORT,
   secure: SMTP_PORT === 465, // Port 587 should be secure: false
   family: 4, // Force IPv4 to avoid ENETUNREACH errors on Render
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 10000,
+  connectionTimeout: 20000,
+  greetingTimeout: 20000,
+  socketTimeout: 20000,
   auth: {
     user: SMTP_USER,
     pass: SMTP_PASS,
   },
 });
 
-const sendEmail = async (mailOptions) => {
+const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+const sendEmail = async (mailOptions, retries = 3) => {
   const options = {
     from: `"UrbanDos" <${FROM_EMAIL}>`,
     to: mailOptions.to,
@@ -37,14 +39,24 @@ const sendEmail = async (mailOptions) => {
     html: mailOptions.html,
     attachments: mailOptions.attachments || [],
   };
-  try {
-    const info = await transporter.sendMail(options);
-    console.log("[EMAIL SUCCESS]:", info.messageId);
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error("[EMAIL ERROR]:", error.code, error.message);
-    // On Render, emails might fail due to network, we log but don't crash background jobs
-    return { success: false, error: error.message, code: error.code };
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      const info = await transporter.sendMail(options);
+      console.log("[EMAIL SUCCESS]:", info.messageId);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error(`[EMAIL ATTEMPT ${i + 1} FAILED]:`, error.code, error.message);
+      
+      if (i < retries - 1) {
+        console.log(`Retrying in 2 seconds...`);
+        await delay(2000);
+        continue;
+      }
+      
+      // On absolute failure, log but don't crash background jobs
+      return { success: false, error: error.message, code: error.code };
+    }
   }
 };
 
