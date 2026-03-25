@@ -8,17 +8,34 @@ const getEnv = (key, fallback = "") => {
 };
 
 const SMTP_HOST = getEnv("SMTP_HOST", "smtp.gmail.com");
-const SMTP_PORT = parseInt(getEnv("SMTP_PORT", "587")); // Default to 587 for Render/ISP compatibility
+const SMTP_PORT = parseInt(getEnv("SMTP_PORT", "587"));
 const SMTP_USER = getEnv("SMTP_USER");
 const SMTP_PASS = getEnv("SMTP_PASS");
 const FROM_EMAIL = getEnv("SMTP_FROM_EMAIL") || SMTP_USER;
-const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || "urbandos7@gmail.com"; // Matches .env
+const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || "urbandos7@gmail.com";
+
+// ===== DEBUG: Log all SMTP config at startup =====
+console.log("========== SMTP CONFIG DEBUG ==========");
+console.log("[SMTP] Host:", SMTP_HOST);
+console.log("[SMTP] Port:", SMTP_PORT);
+console.log("[SMTP] Secure:", SMTP_PORT === 465);
+console.log(
+  "[SMTP] User:",
+  SMTP_USER ? `${SMTP_USER.substring(0, 4)}****` : "NOT SET ❌",
+);
+console.log(
+  "[SMTP] Pass:",
+  SMTP_PASS ? `SET (${SMTP_PASS.length} chars)` : "NOT SET ❌",
+);
+console.log("[SMTP] From Email:", FROM_EMAIL || "NOT SET ❌");
+console.log("[SMTP] Admin Email:", ADMIN_EMAIL);
+console.log("========================================");
 
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
-  secure: true, // Port 587 should be secure: false
-  family: 4, // Force IPv4 to avoid ENETUNREACH errors on Render
+  secure: SMTP_PORT === 465, // Port 587 = STARTTLS (false), Port 465 = implicit TLS (true)
+  family: 4,
   connectionTimeout: 20000,
   greetingTimeout: 20000,
   socketTimeout: 20000,
@@ -26,9 +43,37 @@ const transporter = nodemailer.createTransport({
     user: SMTP_USER,
     pass: SMTP_PASS,
   },
+  // ===== DEBUG: Enable nodemailer debug logging =====
+  logger: true,
+  debug: true,
 });
 
-const delay = (ms) => new Promise(res => setTimeout(res, ms));
+// ===== DEBUG: Verify SMTP connection on startup =====
+transporter
+  .verify()
+  .then(() => {
+    console.log(
+      "✅ [SMTP] Connection verified successfully! Ready to send emails.",
+    );
+  })
+  .catch((err) => {
+    console.error("❌ [SMTP] Connection verification FAILED!");
+    console.error("   Error Code:", err.code);
+    console.error("   Error Message:", err.message);
+    console.error("   Full Error:", JSON.stringify(err, null, 2));
+    if (err.code === "ETIMEDOUT") {
+      console.error(
+        "   💡 HINT: Render free tier may block outbound SMTP. Consider using an HTTP-based email API (Resend, SendGrid, etc.).",
+      );
+    }
+    if (err.code === "EAUTH") {
+      console.error(
+        "   💡 HINT: Check SMTP_USER and SMTP_PASS. For Gmail, use an App Password (not your regular password).",
+      );
+    }
+  });
+
+const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 const sendEmail = async (mailOptions, retries = 3) => {
   const options = {
@@ -40,27 +85,44 @@ const sendEmail = async (mailOptions, retries = 3) => {
     attachments: mailOptions.attachments || [],
   };
 
+  console.log(
+    `[EMAIL] Attempting to send to: ${options.to} | Subject: "${options.subject}"`,
+  );
+
   for (let i = 0; i < retries; i++) {
     try {
+      console.log(`[EMAIL] Attempt ${i + 1}/${retries}...`);
       const info = await transporter.sendMail(options);
-      console.log("[EMAIL SUCCESS]:", info.messageId);
+      console.log(
+        `✅ [EMAIL SUCCESS] MessageId: ${info.messageId} | To: ${options.to} | Response: ${info.response}`,
+      );
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      console.error(`[EMAIL ATTEMPT ${i + 1} FAILED]:`, error.code, error.message);
-      
+      console.error(`❌ [EMAIL ATTEMPT ${i + 1} FAILED]`);
+      console.error(`   Code: ${error.code}`);
+      console.error(`   Message: ${error.message}`);
+      console.error(`   Command: ${error.command || "N/A"}`);
+      console.error(`   ResponseCode: ${error.responseCode || "N/A"}`);
+      console.error(`   Response: ${error.response || "N/A"}`);
+
       if (i < retries - 1) {
-        console.log(`Retrying in 2 seconds...`);
+        console.log(`   ⏳ Retrying in 2 seconds...`);
         await delay(2000);
         continue;
       }
-      
-      // On absolute failure, log but don't crash background jobs
+
+      console.error(
+        `❌ [EMAIL FINAL FAILURE] All ${retries} attempts exhausted for: ${options.to}`,
+      );
       return { success: false, error: error.message, code: error.code };
     }
   }
 };
 
 const sendStatusUpdateEmail = async (order, customerEmail, status) => {
+  console.log(
+    `[EMAIL] Sending status update: ${status} to ${customerEmail} for order ${order._id}`,
+  );
   const emailBody = `
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
       <div style="background-color: #000; color: #fff; padding: 30px; text-align: center;">
@@ -80,7 +142,7 @@ const sendStatusUpdateEmail = async (order, customerEmail, status) => {
         <p>You can track your order history and details in your profile.</p>
         
         <div style="margin: 35px 0; text-align: center;">
-          <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">VIEW ORDER STATUS</a>
+          <a href="${process.env.CLIENT_URL || "http://localhost:5173"}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">VIEW ORDER STATUS</a>
         </div>
       </div>
       
@@ -90,27 +152,36 @@ const sendStatusUpdateEmail = async (order, customerEmail, status) => {
       </div>
     </div>
   `;
-  await sendEmail({ to: customerEmail, subject: `Order Status Update: #${order.orderId || order._id}`, html: emailBody });
+  await sendEmail({
+    to: customerEmail,
+    subject: `Order Status Update: #${order.orderId || order._id}`,
+    html: emailBody,
+  });
 };
 
 module.exports = {
   verifyEmailConfig: async () => {
-    try { await transporter.verify(); return { ok: true }; }
-    catch (e) { return { ok: false, error: e.message }; }
+    try {
+      await transporter.verify();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
   },
   sendOrderInitiatedAlert: async (order) => {
+    console.log(`[EMAIL] Sending order initiated alert for order ${order._id}`);
     let attachments = [];
     let screenshotHtml = "";
     if (order.paymentScreenshot) {
-      // Look for upload in two places just in case - the path stored in DB might be relative to uploads or to root
-      // Usually it's /uploads/payments/filename
-      const relativePath = order.paymentScreenshot.startsWith("/") ? order.paymentScreenshot.substring(1) : order.paymentScreenshot;
+      const relativePath = order.paymentScreenshot.startsWith("/")
+        ? order.paymentScreenshot.substring(1)
+        : order.paymentScreenshot;
       const filePath = path.join(process.cwd(), relativePath);
-      
+
       attachments.push({
         filename: "payment_proof.jpg",
         path: filePath,
-        cid: "proof"
+        cid: "proof",
       });
       screenshotHtml = `
         <div style="margin-top:20px; border: 2px dashed #e0e0e0; padding: 15px; border-radius: 8px;">
@@ -144,9 +215,17 @@ module.exports = {
         </div>
       </div>
     `;
-    await sendEmail({ to: ADMIN_EMAIL, subject: `🚨 NEW ORDER: ₹${order.totalAmount} - #${order._id.toString().slice(-6)}`, html, attachments });
+    await sendEmail({
+      to: ADMIN_EMAIL,
+      subject: `🚨 NEW ORDER: ₹${order.totalAmount} - #${order._id.toString().slice(-6)}`,
+      html,
+      attachments,
+    });
   },
   sendOrderReceivedEmail: async (order, email) => {
+    console.log(
+      `[EMAIL] Sending order received email to ${email} for order ${order._id}`,
+    );
     const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
         <div style="background-color: #000; color: #fff; padding: 30px; text-align: center;">
@@ -167,7 +246,7 @@ module.exports = {
           <p>Once our team verifies the payment, you'll receive another update when your gear has been confirmed for processing.</p>
           
           <div style="margin: 35px 0; text-align: center;">
-             <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">TRACK YOUR ORDER</a>
+             <a href="${process.env.CLIENT_URL || "http://localhost:5173"}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">TRACK YOUR ORDER</a>
           </div>
 
           <p style="font-style: italic; font-size: 14px; text-align: center; color: #666;">"Style is a way to say who you are without having to speak."</p>
@@ -179,20 +258,32 @@ module.exports = {
         </div>
       </div>
     `;
-    await sendEmail({ to: email, subject: `UrbanDos - Order Received! (#${order._id.toString().slice(-6)})`, html });
+    await sendEmail({
+      to: email,
+      subject: `UrbanDos - Order Received! (#${order._id.toString().slice(-6)})`,
+      html,
+    });
   },
   sendStatusUpdateEmail,
-  sendOrderConfirmedEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Confirmed"),
-  sendOrderDispatchedEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Dispatched"),
-  sendOrderShippedEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Shipped"),
-  sendOrderDeliveredEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Delivered"),
-  sendOrderCancelledEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Cancelled"),
+  sendOrderConfirmedEmail: (o) =>
+    sendStatusUpdateEmail(o, o.customerDetails.email, "Confirmed"),
+  sendOrderDispatchedEmail: (o) =>
+    sendStatusUpdateEmail(o, o.customerDetails.email, "Dispatched"),
+  sendOrderShippedEmail: (o) =>
+    sendStatusUpdateEmail(o, o.customerDetails.email, "Shipped"),
+  sendOrderDeliveredEmail: (o) =>
+    sendStatusUpdateEmail(o, o.customerDetails.email, "Delivered"),
+  sendOrderCancelledEmail: (o) =>
+    sendStatusUpdateEmail(o, o.customerDetails.email, "Cancelled"),
   sendUserClaimsPaidEmail: async (order) => {
+    console.log(`[EMAIL] Sending payment claimed alert for order ${order._id}`);
     return await sendEmail({
       to: ADMIN_EMAIL,
       subject: `✅ Payment Claimed - Order #${order._id}`,
-      text: `Customer ${order.customerDetails.name} has marked payment as completed.`
+      text: `Customer ${order.customerDetails.name} has marked payment as completed.`,
     });
   },
-  sendWhatsappAlert: async (message) => { console.log("[WA-MOCK]:", message); }
+  sendWhatsappAlert: async (message) => {
+    console.log("[WA-MOCK]:", message);
+  },
 };
