@@ -20,6 +20,13 @@ const Home = () => {
       try {
         // Fetch new arrivals - fetching 5 to allow varied layout (2 columns for first, 1 for rest in a 4 col grid = 5 items)
         const productsResponse = await fetch(`${API_URL}/api/products`);
+        if (!productsResponse.ok) {
+          const responseType = productsResponse.headers.get("content-type") || "unknown";
+          throw new Error(
+            `Products API failed: ${productsResponse.status} ${productsResponse.statusText} (${responseType})`,
+          );
+        }
+
         const productsData = await productsResponse.json();
         if (Array.isArray(productsData)) {
           setNewArrivals(productsData.slice(0, 5));

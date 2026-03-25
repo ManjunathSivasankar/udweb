@@ -105,9 +105,30 @@ const initiatePayment = async (req, res) => {
     // Notify customer that order is initiated
     (async () => {
       try {
+        const adminResult = await sendOrderInitiatedAlert(newOrder);
+        if (adminResult && adminResult.success) {
+          console.log("[EMAIL] Admin order alert sent to:", adminResult.to);
+        } else {
+          console.error(
+            "[EMAIL] Admin order alert failed:",
+            adminResult?.to || "ADMIN_EMAIL",
+            adminResult?.code || "UNKNOWN",
+            adminResult?.error || "No error details",
+          );
+        }
+
         const customerEmail = newOrder.customerDetails.email;
-        await sendOrderReceivedEmail(newOrder, customerEmail);
-        console.log("[EMAIL] Customer confirmation sent to:", customerEmail);
+        const result = await sendOrderReceivedEmail(newOrder, customerEmail);
+        if (result && result.success) {
+          console.log("[EMAIL] Customer confirmation sent to:", customerEmail);
+        } else {
+          console.error(
+            "[EMAIL] Customer confirmation failed:",
+            customerEmail,
+            result?.code || "UNKNOWN",
+            result?.error || "No error details",
+          );
+        }
       } catch (bgErr) {
         console.error(`[BACKGROUND NOTIFY ERROR] Order ${newOrder._id}:`, bgErr.message);
       }
@@ -154,8 +175,8 @@ const confirmPayment = async (req, res) => {
       // Trigger notifications in the background
       (async () => {
         try {
-          // Send notification with screenshot to admin
-          await sendOrderInitiatedAlert(order);
+          // Notify admin that customer claims payment was completed.
+          await sendUserClaimsPaidEmail(order);
           
           await sendWhatsappAlert(
             `💰 Payment Verification Requested! ${order.customerDetails.name} claims they paid ₹${order.totalAmount} for Order #${order._id.toString().slice(-8)}.`,
