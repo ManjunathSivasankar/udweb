@@ -91,30 +91,30 @@ const Footer = () => {
 
             <ul className="space-y-4 text-white/50 text-sm font-sans font-medium">
               <li>
-                <a href="#" className="hover:text-white transition-colors">
+                <Link to="/profile" className="hover:text-white transition-colors">
                   Order Tracking
-                </a>
+                </Link>
               </li>
 
               <li>
-                <a href="#" className="hover:text-white transition-colors">
+                <Link to="/shipping-policy" className="hover:text-white transition-colors">
                   Shipping Policy
-                </a>
+                </Link>
               </li>
 
               <li>
-                <a href="#" className="hover:text-white transition-colors">
+                <Link to="/returns" className="hover:text-white transition-colors">
                   Returns & Exchanges
-                </a>
+                </Link>
               </li>
 
               <li>
-                <a
-                  href="#"
+                <Link
+                  to="/help"
                   className="hover:text-white transition-colors flex items-center gap-1"
                 >
                   Help Center <ArrowUpRight size={12} />
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -127,13 +127,13 @@ const Footer = () => {
           </p>
 
           <div className="flex space-x-8 text-white/40 text-xs font-sans font-medium">
-            <a href="#" className="hover:text-white transition-colors">
+            <Link to="/privacy" className="hover:text-white transition-colors">
               Privacy Policy
-            </a>
+            </Link>
 
-            <a href="#" className="hover:text-white transition-colors">
+            <Link to="/terms" className="hover:text-white transition-colors">
               Terms of Service
-            </a>
+            </Link>
           </div>
         </div>
       </div>

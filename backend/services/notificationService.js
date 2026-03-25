@@ -1,11 +1,5 @@
-const SibApiV3Sdk = require("sib-api-v3-sdk");
-
-/**
- * notificationService
- * Handles sending emails using Brevo (formerly Sendinblue) API for production reliability.
- * 
- * Requirements: BREVO_API_KEY, FROM_EMAIL, ADMIN_EMAIL in .env
- */
+const nodemailer = require("nodemailer");
+const path = require("path");
 
 const getEnv = (key, fallback = "") => {
   const value = process.env[key];
@@ -13,185 +7,175 @@ const getEnv = (key, fallback = "") => {
   return value.trim().replace(/^["']|["']$/g, "");
 };
 
-// Initialize Brevo API variables for sender/admin
-const BREVO_API_KEY = getEnv("BREVO_API_KEY") || getEnv("BREVO_SMTP_KEY") || getEnv("SMTP_PASS");
-const FROM_EMAIL = getEnv("FROM_EMAIL") || getEnv("SMTP_USER");
-const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || getEnv("SMTP_USER");
+const SMTP_HOST = getEnv("SMTP_HOST", "smtp.gmail.com");
+const SMTP_PORT = parseInt(getEnv("SMTP_PORT", "465"));
+const SMTP_USER = getEnv("SMTP_USER");
+const SMTP_PASS = getEnv("SMTP_PASS");
+const FROM_EMAIL = getEnv("SMTP_FROM_EMAIL") || SMTP_USER;
+const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || "manjukv0007@gmail.com"; // Default to request provided email if not in env
 
-// DEBUG LOGS (Masked)
-if (BREVO_API_KEY) {
-  const maskedKey = BREVO_API_KEY.substring(0, 10) + "..." + BREVO_API_KEY.substring(BREVO_API_KEY.length - 4);
-  console.log(`[EMAIL DEBUG] Loaded Key: ${maskedKey} (Length: ${BREVO_API_KEY.length})`);
-  if (!BREVO_API_KEY.startsWith("xkeysib-")) {
-    console.warn("[EMAIL DEBUG] WARNING: API Key does not start with 'xkeysib-'.");
-  }
-} else {
-  console.error("[EMAIL DEBUG] ERROR: BREVO_API_KEY is missing/empty.");
-}
-
-const defaultClient = SibApiV3Sdk.ApiClient.instance;
-const apiKey = defaultClient.authentications['api-key'];
-apiKey.apiKey = BREVO_API_KEY;
-
-const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+const transporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_PORT === 465,
+  auth: {
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+  },
+});
 
 const sendEmail = async (mailOptions) => {
-  if (!BREVO_API_KEY) {
-    console.warn("[EMAIL] Brevo API Key missing. Email notifications will fail.");
-    return { ok: false, error: "API Key missing" };
-  }
-
-  const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-  sendSmtpEmail.subject = mailOptions.subject;
-  sendSmtpEmail.htmlContent = mailOptions.html || mailOptions.text;
-  sendSmtpEmail.sender = { email: FROM_EMAIL, name: "UrbanDos" };
-  sendSmtpEmail.to = [{ email: mailOptions.to }];
-
+  const options = {
+    from: `"UrbanDos" <${FROM_EMAIL}>`,
+    to: mailOptions.to,
+    subject: mailOptions.subject,
+    text: mailOptions.text,
+    html: mailOptions.html,
+    attachments: mailOptions.attachments || [],
+  };
   try {
-    console.log("[EMAIL] Sending email via Brevo API to:", mailOptions.to);
-    
-    // Ensure API Key is assigned just before call (double-check singleton state)
-    if (apiKey.apiKey !== BREVO_API_KEY) {
-      apiKey.apiKey = BREVO_API_KEY;
-    }
-
-    const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
-    console.log("[EMAIL] API call successful. Message ID:", data.messageId);
-    return { success: true, messageId: data.messageId };
+    const info = await transporter.sendMail(options);
+    console.log("[EMAIL SUCCESS]:", info.messageId);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("[EMAIL ERROR FULL]:", error.response ? error.response.body : error);
-    console.error("[EMAIL ERROR MESSAGE]:", error.message);
-    if (error.response && error.response.body) {
-      console.error("[EMAIL ERROR CODE]:", error.response.body.code);
-    }
+    console.error("[EMAIL ERROR]:", error.message);
     throw error;
-  }
-};
-
-const sendOrderInitiatedAlert = async (order) => {
-  const emailBody = `
-    <div style="font-family: sans-serif; line-height: 1.6;">
-      <h2>New Order Received!</h2>
-      <p><strong>Order ID:</strong> ${order.orderId || order._id}</p>
-      <p><strong>Total Amount:</strong> ₹${order.totalAmount}</p>
-      <p><strong>Customer:</strong> ${order.customerDetails.name}</p>
-      <p><strong>Phone:</strong> ${order.customerDetails.phone}</p>
-    </div>
-  `;
-
-  try {
-    await sendEmail({
-      to: ADMIN_EMAIL,
-      subject: `New Order Alert: #${order.orderId || order._id}`,
-      html: emailBody,
-    });
-  } catch (error) {
-    console.error(`[EMAIL] Failed to send admin alert for order ${order._id}`);
-  }
-};
-
-const sendOrderReceivedEmail = async (order, customerEmail) => {
-  const emailBody = `
-    <div style="font-family: sans-serif; line-height: 1.6;">
-      <h2>Hello ${order.shippingAddress.name},</h2>
-      <p>Your order <strong>#${order.orderId || order._id}</strong> has been received and is being processed.</p>
-      <p><strong>Total Amount:</strong> ₹${order.totalAmount}</p>
-      <p>Thank you for shopping with UrbanDos!</p>
-    </div>
-  `;
-
-  try {
-    await sendEmail({
-      to: customerEmail,
-      subject: `Order Received: #${order.orderId || order._id}`,
-      html: emailBody,
-    });
-  } catch (error) {
-    console.error(`[EMAIL] Failed to send confirmation email to ${customerEmail}`);
   }
 };
 
 const sendStatusUpdateEmail = async (order, customerEmail, status) => {
   const emailBody = `
-    <div style="font-family: sans-serif; line-height: 1.6;">
-      <h2>Hello ${order.shippingAddress.name},</h2>
-      <p>Your order <strong>#${order.orderId || order._id}</strong> status has been updated to: <strong>${status}</strong>.</p>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+      <div style="background-color: #000; color: #fff; padding: 30px; text-align: center;">
+        <h1 style="margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">UrbanDos</h1>
+      </div>
+      
+      <div style="padding: 30px; background-color: #fff;">
+        <h2 style="color: #000; margin-top: 0;">Order Update</h2>
+        <p>Hello <strong>${order.customerDetails.name}</strong>,</p>
+        <p>The status of your order <strong>#${order.orderId || order._id}</strong> has been updated:</p>
+        
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin: 25px 0; border-left: 5px solid #000; display: flex; align-items: center;">
+          <div style="font-size: 14px; color: #666; margin-right: 15px;">NEW STATUS:</div>
+          <div style="font-size: 20px; font-weight: bold; color: #000; text-transform: uppercase;">${status}</div>
+        </div>
+        
+        <p>You can track your order history and details in your profile.</p>
+        
+        <div style="margin: 35px 0; text-align: center;">
+          <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">VIEW ORDER STATUS</a>
+        </div>
+      </div>
+      
+      <div style="background-color: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #eee; font-size: 12px; color: #888;">
+        <p style="margin: 0;">Stay Sharp. Stay Bold. Stay Urban.</p>
+        <p style="margin: 5px 0 0 0;">&copy; ${new Date().getFullYear()} UrbanDos. All rights reserved.</p>
+      </div>
     </div>
   `;
-
-  try {
-    await sendEmail({
-      to: customerEmail,
-      subject: `Order Status Update: #${order.orderId || order._id}`,
-      html: emailBody,
-    });
-  } catch (error) {
-    console.error(`[EMAIL] Failed to send status update to ${customerEmail}`);
-  }
-};
-
-const verifyEmailConfig = async () => {
-  if (!BREVO_API_KEY) return { ok: false, error: "API Key missing" };
-  
-  try {
-    const accountApi = new SibApiV3Sdk.AccountApi();
-    await accountApi.getAccount();
-    console.log("[EMAIL] Brevo API connection verified.");
-    return { ok: true };
-  } catch (error) {
-    console.error("[EMAIL] Brevo API verification failed:", error.message);
-    return { ok: false, error: error.message };
-  }
-};
-
-const sendTestEmail = async (to) => {
-  try {
-    const result = await sendEmail({
-      to,
-      subject: "Brevo API Test",
-      text: "This is a test email to verify Brevo API on production.",
-      html: "<h3>This is a test email to verify Brevo API on production.</h3>"
-    });
-    return { ok: true, info: result };
-  } catch (error) {
-    return { ok: false, error: error.message };
-  }
-};
-
-const sendMailWithRetry = async (options) => {
-  return await sendEmail(options);
+  await sendEmail({ to: customerEmail, subject: `Order Status Update: #${order.orderId || order._id}`, html: emailBody });
 };
 
 module.exports = {
-  sendOrderInitiatedAlert,
-  sendOrderReceivedEmail,
+  verifyEmailConfig: async () => {
+    try { await transporter.verify(); return { ok: true }; }
+    catch (e) { return { ok: false, error: e.message }; }
+  },
+  sendOrderInitiatedAlert: async (order) => {
+    let attachments = [];
+    let screenshotHtml = "";
+    if (order.paymentScreenshot) {
+      // Look for upload in two places just in case - the path stored in DB might be relative to uploads or to root
+      // Usually it's /uploads/payments/filename
+      const relativePath = order.paymentScreenshot.startsWith("/") ? order.paymentScreenshot.substring(1) : order.paymentScreenshot;
+      const filePath = path.join(process.cwd(), relativePath);
+      
+      attachments.push({
+        filename: "payment_proof.jpg",
+        path: filePath,
+        cid: "proof"
+      });
+      screenshotHtml = `
+        <div style="margin-top:20px; border: 2px dashed #e0e0e0; padding: 15px; border-radius: 8px;">
+          <p style="font-weight: bold; color: #d32f2f;">📸 CUSTOMER PAYMENT PROOF:</p>
+          <img src="cid:proof" style="max-width:400px; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.1)"/>
+          <p style="font-size: 11px; color: #888; margin-top: 10px;">File path for debugging: ${filePath}</p>
+        </div>
+      `;
+    }
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 25px; border: 1px solid #eee; border-radius: 10px; max-width: 600px;">
+        <h1 style="color: #d32f2f; border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 20px;">🚨 URGENT: NEW ORDER RECEIVED</h1>
+        
+        <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 6px;">
+          <p><strong>Order ID:</strong> <span style="font-family: monospace; font-size: 16px;">#${order._id}</span></p>
+          <p><strong>Total Amount:</strong> <span style="color: #2e7d32; font-weight: bold; font-size: 18px;">₹${order.totalAmount}</span></p>
+          <p><strong>Customer:</strong> ${order.customerDetails.name} (${order.customerDetails.email})</p>
+          <p><strong>Phone:</strong> ${order.customerDetails.phone}</p>
+          <p><strong>Shipping:</strong> ${order.shippingMethod}</p>
+        </div>
+
+        <div style="margin: 20px 0;">
+          <p><strong>Address:</strong><br/>
+          ${order.shippingAddress.address}, ${order.shippingAddress.city}, ${order.shippingAddress.state} - ${order.shippingAddress.pinCode}</p>
+        </div>
+
+        ${screenshotHtml}
+        
+        <div style="margin-top: 30px; text-align: center;">
+          <p style="font-size: 12px; color: #999;">UrbanDos Automated Order System</p>
+        </div>
+      </div>
+    `;
+    await sendEmail({ to: ADMIN_EMAIL, subject: `🚨 NEW ORDER: ₹${order.totalAmount} - #${order._id.toString().slice(-6)}`, html, attachments });
+  },
+  sendOrderReceivedEmail: async (order, email) => {
+    const html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+        <div style="background-color: #000; color: #fff; padding: 30px; text-align: center;">
+          <h1 style="margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">UrbanDos</h1>
+        </div>
+        
+        <div style="padding: 30px; background-color: #fff;">
+          <h2 style="color: #000; margin-top: 0; text-align: center;">WE'VE RECEIVED YOUR ORDER!</h2>
+          <p>Hello <strong>${order.customerDetails.name}</strong>,</p>
+          <p>Thank you for shopping with UrbanDos. Your style statement is on its way to reality. Your order is currently undergoing payment verification.</p>
+          
+          <div style="margin: 25px 0; padding: 20px; border: 1px solid #eee; border-radius: 6px;">
+            <p style="margin: 0 0 10px 0;"><strong>Order ID:</strong> #${order._id}</p>
+            <p style="margin: 0 0 10px 0;"><strong>Total Amount:</strong> ₹${order.totalAmount}</p>
+            <p style="margin: 0;"><strong>Current Status:</strong> <span style="color: #f57c00; font-weight: bold;">Order Placed</span></p>
+          </div>
+
+          <p>Once our team verifies the payment, you'll receive another update when your gear has been confirmed for processing.</p>
+          
+          <div style="margin: 35px 0; text-align: center;">
+             <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">TRACK YOUR ORDER</a>
+          </div>
+
+          <p style="font-style: italic; font-size: 14px; text-align: center; color: #666;">"Style is a way to say who you are without having to speak."</p>
+        </div>
+        
+        <div style="background-color: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #eee; font-size: 12px; color: #888;">
+          <p style="margin: 0;">Stay Sharp. Stay Bold. Stay Urban.</p>
+          <p style="margin: 5px 0 0 0;">&copy; ${new Date().getFullYear()} UrbanDos. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+    await sendEmail({ to: email, subject: `UrbanDos - Order Received! (#${order._id.toString().slice(-6)})`, html });
+  },
   sendStatusUpdateEmail,
-  verifyEmailConfig,
-  sendTestEmail,
-  sendMailWithRetry,
-  sendOrderConfirmedEmail: async (order) => {
-    return await sendStatusUpdateEmail(order, order.customerDetails.email, "Confirmed");
-  },
-  sendOrderDispatchedEmail: async (order) => {
-    return await sendStatusUpdateEmail(order, order.customerDetails.email, "Dispatched");
-  },
-  sendOrderShippedEmail: async (order) => {
-    return await sendStatusUpdateEmail(order, order.customerDetails.email, "Shipped");
-  },
-  sendOrderDeliveredEmail: async (order) => {
-    return await sendStatusUpdateEmail(order, order.customerDetails.email, "Delivered");
-  },
-  sendOrderCancelledEmail: async (order) => {
-    return await sendStatusUpdateEmail(order, order.customerDetails.email, "Cancelled");
-  },
+  sendOrderConfirmedEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Confirmed"),
+  sendOrderDispatchedEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Dispatched"),
+  sendOrderShippedEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Shipped"),
+  sendOrderDeliveredEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Delivered"),
+  sendOrderCancelledEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Cancelled"),
   sendUserClaimsPaidEmail: async (order) => {
     return await sendEmail({
       to: ADMIN_EMAIL,
-      subject: `✅ Payment Claimed - Order #${order.orderId || order._id}`,
-      text: `Customer ${order.customerDetails.name} has marked payment as completed for ₹${order.totalAmount}.`
+      subject: `✅ Payment Claimed - Order #${order._id}`,
+      text: `Customer ${order.customerDetails.name} has marked payment as completed.`
     });
   },
-  sendWhatsappAlert: async (message) => {
-    console.log("[WHATSAPP] Alert (Mocked):", message);
-  }
+  sendWhatsappAlert: async (message) => { console.log("[WA-MOCK]:", message); }
 };

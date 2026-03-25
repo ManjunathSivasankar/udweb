@@ -20,13 +20,14 @@ const Cart = () => {
     0,
   );
 
-  let shipping = 60;
-  if (totalItemsCount >= 7) {
-    shipping = 135;
-  } else if (totalItemsCount >= 3) {
-    shipping = 100;
-  }
+  const getShippingFee = (itemCount) => {
+    if (itemCount === 0) return 0;
+    const baseFee = 60;
+    if (itemCount <= 3) return baseFee;
+    return baseFee + Math.ceil((itemCount - 3) / 3) * 20;
+  };
 
+  const shipping = getShippingFee(totalItemsCount);
   const total = subtotal + shipping;
 
   if (Cart.length === 0) {

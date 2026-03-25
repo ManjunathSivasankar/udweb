@@ -8,9 +8,16 @@ import Cart from "./pages/Cart";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
-import Checkout from "./pages/Checkout";
 import Admin from "./pages/Admin";
+import Checkout from "./pages/Checkout";
 import PaymentStatus from "./pages/PaymentStatus";
+import HelpCenter from "./pages/HelpCenter";
+import {
+  TermsAndConditions,
+  PrivacyPolicy,
+  ShippingPolicy,
+  ReturnExchangePolicy,
+} from "./pages/Policies";
 import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { CollectionProvider } from "./context/CollectionContext";
@@ -39,6 +46,11 @@ function App() {
                   path="payment-status/:orderId"
                   element={<PaymentStatus />}
                 />
+                <Route path="terms" element={<TermsAndConditions />} />
+                <Route path="privacy" element={<PrivacyPolicy />} />
+                <Route path="shipping-policy" element={<ShippingPolicy />} />
+                <Route path="returns" element={<ReturnExchangePolicy />} />
+                <Route path="help" element={<HelpCenter />} />
               </Route>
             </Routes>
           </Router>

@@ -164,7 +164,7 @@ const ProductDetails = () => {
                   <button
                     key={size}
                     onClick={() => setSelectedSize(size)}
-                    className={`w-14 h-14 flex items-center justify-center text-sm font-bold border-2 transition-all ${selectedSize === size ? "bg-primary text-white border-primary" : "border-primary/10 text-primary/50 hover:border-primary/40"}`}
+                    className={`w-14 h-14 flex items-center justify-center text-sm font-black tracking-widest border-2 transition-all ${selectedSize === size ? "bg-primary text-white border-primary" : "border-primary/10 text-primary/50 hover:border-primary/40"}`}
                   >
                     {size}
                   </button>

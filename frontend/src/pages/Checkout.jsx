@@ -30,10 +30,13 @@ const Checkout = () => {
   const subtotal = getCartTotal();
   const totalItemsCount = Cart.reduce((acc, item) => acc + item.quantity, 0);
 
+  const [shippingRequired, setShippingRequired] = useState(true);
+
   const getShippingFee = () => {
-    if (totalItemsCount >= 7) return 135;
-    if (totalItemsCount >= 3) return 100;
-    return 60;
+    if (!shippingRequired || totalItemsCount === 0) return 0;
+    const baseFee = 60;
+    if (totalItemsCount <= 3) return baseFee;
+    return baseFee + Math.ceil((totalItemsCount - 3) / 3) * 20;
   };
 
   const shipping = getShippingFee();
@@ -268,6 +271,47 @@ const Checkout = () => {
                     className="w-full bg-secondary border border-white/10 p-4 text-sm focus:outline-none focus:border-white transition-colors"
                   />
                 </div>
+              </div>
+
+              <div className="pt-6 border-t border-white/5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="shippingRequired"
+                      checked={shippingRequired}
+                      onChange={() => setShippingRequired(true)}
+                      className="hidden"
+                    />
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${shippingRequired ? "border-white bg-white" : "border-white/20 group-hover:border-white/40"}`}>
+                      {shippingRequired && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    </div>
+                    <span className={`text-xs font-bold uppercase tracking-widest transition-colors ${shippingRequired ? "text-white" : "text-accent/40"}`}>
+                      Shipping Required
+                    </span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="shippingRequired"
+                      checked={!shippingRequired}
+                      onChange={() => setShippingRequired(false)}
+                      className="hidden"
+                    />
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${!shippingRequired ? "border-white bg-white" : "border-white/20 group-hover:border-white/40"}`}>
+                      {!shippingRequired && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    </div>
+                    <span className={`text-xs font-bold uppercase tracking-widest transition-colors ${!shippingRequired ? "text-white" : "text-accent/40"}`}>
+                      No Shipping Required
+                    </span>
+                  </label>
+                </div>
+                <p className="text-[10px] text-accent/30 mt-4 uppercase tracking-widest font-bold">
+                  {shippingRequired 
+                    ? "Existing delivery charges will apply (₹60 for first 3 items, +₹20 every next 3)." 
+                    : "I will pick up my order from the store."}
+                </p>
               </div>
             </form>
           </div>

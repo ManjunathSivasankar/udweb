@@ -1,4 +1,37 @@
 const Order = require("../models/Order");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+
+// Configure storage for payment screenshots
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = "uploads/payments";
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, "payment-" + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    cb(new Error("Only images (jpeg, jpg, png) are allowed."));
+  },
+}).single("screenshot");
+
 const {
   sendOrderInitiatedAlert,
   sendOrderReceivedEmail,
@@ -69,20 +102,12 @@ const initiatePayment = async (req, res) => {
 
     console.log("[PAYMENT] Order created and UPI link generated:", newOrder._id);
 
-    // Notify admin & customer in the background to avoid blocking the response
-    // If the email service is slow, this will prevent the client from hanging on "PROCESSING..."
+    // Notify customer that order is initiated
     (async () => {
       try {
-        await sendOrderInitiatedAlert(newOrder);
-        console.log("[EMAIL] Admin alert sent for order:", newOrder._id);
-        
         const customerEmail = newOrder.customerDetails.email;
         await sendOrderReceivedEmail(newOrder, customerEmail);
         console.log("[EMAIL] Customer confirmation sent to:", customerEmail);
-        
-        await sendWhatsappAlert(
-          `🆕 New Order #${newOrder._id.toString().slice(-8)} initiated for ₹${totalAmount}. Please check dashboard.`,
-        );
       } catch (bgErr) {
         console.error(`[BACKGROUND NOTIFY ERROR] Order ${newOrder._id}:`, bgErr.message);
       }
@@ -104,45 +129,56 @@ const initiatePayment = async (req, res) => {
 // ─── 2. Confirm Payment (User Signal) ──────────────────────────────────────────
 // POST /api/payment/confirm/:orderId
 const confirmPayment = async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const order = await Order.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
+  upload(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message });
     }
 
-    // Mark payment as completed once the customer confirms they paid.
-    if (order.status === "Order Placed") {
-      order.status = "Payment Completed";
-      await order.save();
-    }
+    try {
+      const { orderId } = req.params;
+      const order = await Order.findById(orderId);
 
-    // Trigger notifications in the background
-    (async () => {
-      try {
-        const paymentSignalResult = await sendUserClaimsPaidEmail(order);
-        if (!paymentSignalResult?.success) {
-          console.error(`[EMAIL] Failed to send payment-completed admin email for order ${order._id}`);
-        }
-        await sendWhatsappAlert(
-          `💰 Payment Verification Requested! ${order.customerDetails.name} claims they paid ₹${order.totalAmount} for Order #${order._id.toString().slice(-8)}.`,
-        );
-      } catch (bgErr) {
-        console.error(`[BACKGROUND NOTIFY ERROR] order ${order._id}:`, bgErr.message);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
       }
-    })();
 
-    return res
-      .status(200)
-      .json({ message: "Payment completion signal sent to admin." });
-  } catch (error) {
-    console.error("confirmPayment error:", error);
-    return res.status(500).json({
-      message: "Failed to process confirmation.",
-      error: error.message,
-    });
-  }
+      // Mark payment as completed once the customer confirms they paid.
+      if (order.status === "Order Placed") {
+        order.status = "Order Confirmed"; // Requirement 8: First status "Order Confirmed"
+        if (req.file) {
+          order.paymentScreenshot = `/uploads/payments/${req.file.filename}`;
+        }
+        await order.save();
+      }
+
+      // Trigger notifications in the background
+      (async () => {
+        try {
+          // Send notification with screenshot to admin
+          await sendOrderInitiatedAlert(order);
+          
+          await sendWhatsappAlert(
+            `💰 Payment Verification Requested! ${order.customerDetails.name} claims they paid ₹${order.totalAmount} for Order #${order._id.toString().slice(-8)}.`,
+          );
+        } catch (bgErr) {
+          console.error(
+            `[BACKGROUND NOTIFY ERROR] order ${order._id}:`,
+            bgErr.message,
+          );
+        }
+      })();
+
+      return res
+        .status(200)
+        .json({ message: "Order confirmed. Admin will verify payment." });
+    } catch (error) {
+      console.error("confirmPayment error:", error);
+      return res.status(500).json({
+        message: "Failed to process confirmation.",
+        error: error.message,
+      });
+    }
+  });
 };
 
 // ─── 3. Get Payment Status ────────────────────────────────────────────────────

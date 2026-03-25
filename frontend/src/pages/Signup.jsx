@@ -10,8 +10,18 @@ const Signup = () => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signup } = useAuth();
+  const { signup, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  const handleGoogleSignup = async () => {
+    try {
+      setError("");
+      await loginWithGoogle();
+      navigate("/profile");
+    } catch (err) {
+      setError("Google signup failed.");
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -107,6 +117,25 @@ const Signup = () => {
             )}
           </button>
         </form>
+
+        <div className="relative my-10 text-center">
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-white/5" />
+          <span className="relative bg-[#1a1a1a] px-4 text-[10px] text-accent/20 uppercase tracking-[0.5em] font-bold">
+            OR
+          </span>
+        </div>
+
+        <button
+          onClick={handleGoogleSignup}
+          className="w-full border border-white/5 p-4 rounded-md text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-4 hover:bg-[#f6f6f6] hover:text-primary transition-all duration-300"
+        >
+          <img
+            src="https://www.google.com/favicon.ico"
+            className="w-4 h-4 grayscale group-hover:grayscale-0"
+            alt=""
+          />
+          Continue with Google
+        </button>
 
         <p className="mt-10 text-center text-accent/30 text-[10px] uppercase tracking-widest font-bold">
           Already a member?{" "}

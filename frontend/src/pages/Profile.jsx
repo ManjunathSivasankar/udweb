@@ -89,6 +89,36 @@ const Profile = () => {
     localStorage.setItem("clearedOrders", JSON.stringify(newCleared));
   };
 
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm("Are you sure you want to cancel this order? Refund will be processed within 24–48 hours.")) return;
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`${API_URL}/api/orders/${orderId}/cancel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        // Refresh orders
+        const updatedResponse = await fetch(`${API_URL}/api/orders`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (updatedResponse.ok) {
+          const data = await updatedResponse.json();
+          setUserOrders(data);
+        }
+        alert("Order cancelled successfully.");
+      } else {
+        const err = await response.json();
+        alert(err.message || "Failed to cancel order.");
+      }
+    } catch (error) {
+      console.error("Cancel order error:", error);
+      alert("Error cancelling order.");
+    }
+  };
+
   const visibleOrders = userOrders.filter(
     (o) => !clearedOrders.includes(o._id),
   );
@@ -347,6 +377,18 @@ const Profile = () => {
                         </span>
                         <span>{order.shippingMethod}</span>
                       </div>
+                      
+                      {/* Cancel Button */}
+                      {order.status !== "Cancelled" && 
+                       order.status !== "Shipped" && 
+                       order.status !== "Delivered" && (
+                        <button
+                          onClick={() => handleCancelOrder(order._id)}
+                          className="mt-6 w-full py-3 border border-red-500/20 text-red-500 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-red-50 transition-colors"
+                        >
+                          Cancel Order
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

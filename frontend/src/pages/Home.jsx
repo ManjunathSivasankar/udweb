@@ -201,14 +201,14 @@ const Home = () => {
 
               <motion.div
                 className="flex flex-col gap-6"
-                animate={{ y: [0, -600] }}
+                animate={{ y: [0, -800] }}
                 transition={{
                   repeat: Infinity,
-                  duration: 30,
+                  duration: 20,
                   ease: "linear",
                 }}
               >
-                {[1, 2, 3, 4, 1, 2, 3, 4].map((n, i) => (
+                {[1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4].map((n, i) => (
                   <div
                     key={i}
                     className="p-8 bg-white/40 backdrop-blur-sm border border-primary/5 rounded-2xl shadow-sm hover:bg-white/60 transition-colors"

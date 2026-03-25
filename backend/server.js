@@ -121,6 +121,10 @@ app.use("/api/payment", require("./routes/paymentRoutes"));
 
 app.get("/", (req, res) => res.send("API Regular"));
 
+// Serve static uploads
+const path = require("path");
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 // GET /api/health/email  – diagnose SMTP config from production
 app.get("/api/health/email", async (req, res) => {
   try {

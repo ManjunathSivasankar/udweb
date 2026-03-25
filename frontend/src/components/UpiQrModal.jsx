@@ -19,8 +19,22 @@ const UpiQrModal = ({ upiLink, orderId, amount, onClose }) => {
   const [redirectTriggered, setRedirectTriggered] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [screenshot, setScreenshot] = useState(null);
+  const [screenshotPreview, setScreenshotPreview] = useState(null);
 
   const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:5000" : "https://my-shop-backend-z7jb.onrender.com");
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setScreenshot(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setScreenshotPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Detect mobile once on mount
   useEffect(() => {
@@ -51,12 +65,20 @@ const UpiQrModal = ({ upiLink, orderId, amount, onClose }) => {
   }, [isMobile, upiLink]);
 
   const handleConfirmPayment = async () => {
+    if (!screenshot) {
+      alert("Please upload payment screenshot.");
+      return;
+    }
     setIsConfirming(true);
     try {
+      const formData = new FormData();
+      formData.append("screenshot", screenshot);
+
       const response = await fetch(
         `${API_URL}/api/payment/confirm/${orderId}`,
         {
           method: "POST",
+          body: formData,
         },
       );
       if (response.ok) {
@@ -148,28 +170,55 @@ const UpiQrModal = ({ upiLink, orderId, amount, onClose }) => {
               </div>
             )}
 
-            <div className="space-y-3 w-full">
+            <div className="mt-4 border-t border-white/5 pt-6 text-left">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-4 text-center">
+                Upload payment screenshot
+              </label>
+              
+              {!screenshotPreview ? (
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/10 rounded-xl hover:border-white/20 transition-all cursor-pointer bg-white/5">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <Smartphone size={24} className="text-white/20 mb-2" />
+                    <p className="text-[9px] text-white/40 uppercase font-black tracking-widest">Select Screenshot</p>
+                  </div>
+                  <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                </label>
+              ) : (
+                <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20">
+                  <img src={screenshotPreview} alt="Payment Proof" className="w-full h-full object-cover" />
+                  <button 
+                    onClick={() => { setScreenshot(null); setScreenshotPreview(null); }}
+                    className="absolute top-2 right-2 p-1 bg-black/60 rounded-full text-white/70 hover:text-white"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               <button
                 onClick={handleConfirmPayment}
-                disabled={isConfirming}
-                className="w-full bg-white text-black py-4 rounded-sm text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-white/90 transition-all disabled:opacity-50"
+                disabled={isConfirming || !screenshot}
+                className="w-full mt-6 bg-white text-black py-4 rounded-sm text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-white/90 transition-all disabled:opacity-50"
               >
                 {isConfirming ? (
-                  <Loader2 size={16} className="animate-spin" />
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> VERIFYING...
+                  </>
                 ) : (
-                  "I HAVE PAID"
+                  <>I HAVE PAID</>
                 )}
               </button>
+              
               <button
                 onClick={goToStatus}
-                className="w-full text-white/40 hover:text-white py-2 text-[9px] font-bold uppercase tracking-[0.3em] transition-colors"
+                className="w-full text-white/40 hover:text-white py-4 text-[9px] font-bold uppercase tracking-[0.3em] transition-colors"
               >
                 Check Status Without Confirming
               </button>
             </div>
 
-            <div className="mt-8 text-[9px] text-white/10 font-mono tracking-tighter">
-              ID: {orderId}
+            <div className="mt-8 text-[9px] text-white/10 font-mono tracking-tighter uppercase">
+              Order ID: {orderId}
             </div>
           </>
         )}

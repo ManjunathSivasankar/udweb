@@ -44,6 +44,7 @@ const orderSchema = new mongoose.Schema({
   // UPI Payment fields
   paymentMethod: { type: String, default: "UPI" },
   upiLink: { type: String }, // Generated UPI intent deep-link
+  paymentScreenshot: { type: String }, // URL/Path to uploaded screenshot
   createdAt: { type: Date, default: Date.now },
 });
 

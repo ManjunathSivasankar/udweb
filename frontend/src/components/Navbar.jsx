@@ -67,9 +67,9 @@ const Navbar = () => {
 
   return (
     <nav
-      className={`fixed w-full transition-[padding,background-color,border-color,box-shadow,backdrop-filter] duration-300 ${
+      className={`fixed w-full transition-[padding,background-color,border-color,box-shadow] duration-300 ${
         isOpen
-          ? "z-[1000] bg-white"
+          ? "z-[1000] bg-white text-primary transition-none"
           : "z-50 backdrop-blur-md " +
             (isScrolled ? "py-4" : "py-6") +
             " " +
@@ -107,9 +107,10 @@ const Navbar = () => {
             <AnimatePresence>
               {activeDropdown === "collections" && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
+                  exit={{ opacity: 0, y: 5 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
                   className="absolute top-full left-0 w-[400px] mt-2 p-6 glass-Card grid grid-cols-2 gap-4 bg-primary/95 text-white shadow-2xl rounded-lg border border-white/10"
                 >
                   {collections.map((item) => (

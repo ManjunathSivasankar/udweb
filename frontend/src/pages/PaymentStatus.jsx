@@ -13,8 +13,8 @@ const PaymentStatus = () => {
           <CheckCircle2 size={80} className="text-green-500 relative z-10" />
         </div>
       }
-      title="Payment Completed"
-      subtitle="Your payment has been completed successfully. Your order has been placed. You can check your order status in the 'My Orders' section of your profile. Once your order is ready for dispatch, we will send you an email notification."
+      title="Order Confirmed"
+      subtitle="Your order signal has been received. Please allow 12-24 hours for payment verification. You can check your order status in the 'My Orders' section of your profile. Once your order is ready for dispatch, we will send you an email notification."
       color="green"
     >
       <div className="flex flex-col gap-4 w-full max-w-xs">

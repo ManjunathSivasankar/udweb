@@ -88,6 +88,10 @@ const updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
+    if (order.status === "Cancelled" && status !== "Cancelled") {
+      return res.status(400).json({ message: "Cannot change status of a cancelled order" });
+    }
+
     const previousStatus = order.status;
     if (previousStatus === status) {
       return res
@@ -120,6 +124,49 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
+const cancelOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findById(id);
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Security check: Only the owner can cancel (unless admin, but this is a user action)
+    if (req.user && order.userId !== req.user.uid && order.userId !== "guest") {
+       return res.status(403).json({ message: "Unauthorized to cancel this order" });
+    }
+
+    if (order.status === "Shipped" || order.status === "Delivered") {
+      return res.status(400).json({ message: "Cannot cancel order after it has been shipped or delivered" });
+    }
+
+    if (order.status === "Cancelled") {
+      return res.status(200).json({ message: "Order is already cancelled", order });
+    }
+
+    order.status = "Cancelled";
+    await order.save();
+
+    const { sendStatusUpdateEmail } = require("../services/notificationService");
+    try {
+      if (order.customerDetails && order.customerDetails.email) {
+        await sendStatusUpdateEmail(order, order.customerDetails.email, "Cancelled");
+      }
+    } catch (emailErr) {
+      console.error("[EMAIL ERROR] Cancellation notification failed:", emailErr.message);
+    }
+
+    res.status(200).json({ 
+      message: "Order cancelled successfully. Refund will be processed within 24–48 hours.", 
+      order 
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error cancelling order", error: error.message });
+  }
+};
+
 // Delete order
 const deleteOrder = async (req, res) => {
   try {
@@ -143,5 +190,6 @@ module.exports = {
   getUserOrders,
   getAllOrders,
   updateOrderStatus,
+  cancelOrder,
   deleteOrder,
 };

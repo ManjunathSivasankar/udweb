@@ -6,11 +6,13 @@ const {
   getAllOrders,
   updateOrderStatus,
   deleteOrder,
+  cancelOrder,
 } = require("../controllers/orderController");
 const { verifyToken } = require("../middleware/authMiddleware");
 
 router.post("/", verifyToken, createOrder); // Require auth to place order on this endpoint
 router.get("/", verifyToken, getUserOrders);
+router.post("/:id/cancel", verifyToken, cancelOrder);
 
 // Admin routes
 router.get("/admin/all", getAllOrders);
