@@ -5,6 +5,16 @@ const Order = require("./models/Order");
 
 async function test() {
   try {
+    const { verifyEmailConfig } = require("./services/notificationService");
+    console.log("Verifying SMTP Config...");
+    const configCheck = await verifyEmailConfig();
+    console.log("Config Status:", configCheck);
+
+    if (!configCheck.ok) {
+       console.error("SMTP Verification FAILED. Fix config before testing emails.");
+       return;
+    }
+
     await mongoose.connect(process.env.MONGO_URI);
     
     // Find the order I just created

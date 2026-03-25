@@ -8,16 +8,20 @@ const getEnv = (key, fallback = "") => {
 };
 
 const SMTP_HOST = getEnv("SMTP_HOST", "smtp.gmail.com");
-const SMTP_PORT = parseInt(getEnv("SMTP_PORT", "465"));
+const SMTP_PORT = parseInt(getEnv("SMTP_PORT", "587")); // Default to 587 for Render/ISP compatibility
 const SMTP_USER = getEnv("SMTP_USER");
 const SMTP_PASS = getEnv("SMTP_PASS");
 const FROM_EMAIL = getEnv("SMTP_FROM_EMAIL") || SMTP_USER;
-const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || "manjukv0007@gmail.com"; // Default to request provided email if not in env
+const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || "urbandos7@gmail.com"; // Matches .env
 
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
-  secure: SMTP_PORT === 465,
+  secure: SMTP_PORT === 465, // Port 587 should be secure: false
+  family: 4, // Force IPv4 to avoid ENETUNREACH errors on Render
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
   auth: {
     user: SMTP_USER,
     pass: SMTP_PASS,
@@ -38,8 +42,9 @@ const sendEmail = async (mailOptions) => {
     console.log("[EMAIL SUCCESS]:", info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("[EMAIL ERROR]:", error.message);
-    throw error;
+    console.error("[EMAIL ERROR]:", error.code, error.message);
+    // On Render, emails might fail due to network, we log but don't crash background jobs
+    return { success: false, error: error.message, code: error.code };
   }
 };
 
