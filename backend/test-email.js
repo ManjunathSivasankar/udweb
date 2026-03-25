@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const mongoose = require("mongoose");
 const { sendOrderInitiatedAlert, sendOrderConfirmedEmail } = require("./services/notificationService");
 const Order = require("./models/Order");
@@ -6,12 +6,12 @@ const Order = require("./models/Order");
 async function test() {
   try {
     const { verifyEmailConfig } = require("./services/notificationService");
-    console.log("Verifying SMTP Config...");
+     console.log("Verifying email provider config...");
     const configCheck = await verifyEmailConfig();
     console.log("Config Status:", configCheck);
 
     if (!configCheck.ok) {
-       console.error("SMTP Verification FAILED. Fix config before testing emails.");
+       console.error("Email provider verification FAILED. Fix config before testing emails.");
        return;
     }
 

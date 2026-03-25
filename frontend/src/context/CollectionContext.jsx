@@ -14,6 +14,13 @@ export const CollectionProvider = ({ children }) => {
     const fetchCollections = async () => {
       try {
         const response = await fetch(`${API_URL}/api/collections`);
+        if (!response.ok) {
+          const responseType = response.headers.get("content-type") || "unknown";
+          throw new Error(
+            `Collections API failed: ${response.status} ${response.statusText} (${responseType})`,
+          );
+        }
+
         const data = await response.json();
         if (Array.isArray(data)) {
           setCollections(data);

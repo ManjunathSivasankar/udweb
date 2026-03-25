@@ -1,5 +1,4 @@
-const nodemailer = require("nodemailer");
-const path = require("path");
+const { Resend } = require("resend");
 
 const getEnv = (key, fallback = "") => {
   const value = process.env[key];
@@ -7,46 +6,47 @@ const getEnv = (key, fallback = "") => {
   return value.trim().replace(/^["']|["']$/g, "");
 };
 
-const SMTP_HOST = getEnv("SMTP_HOST", "smtp.gmail.com");
-const SMTP_PORT = parseInt(getEnv("SMTP_PORT", "587")); // Default to 587 for Render/ISP compatibility
-const SMTP_USER = getEnv("SMTP_USER");
-const SMTP_PASS = getEnv("SMTP_PASS");
-const FROM_EMAIL = getEnv("SMTP_FROM_EMAIL") || SMTP_USER;
+const RESEND_API_KEY = getEnv("RESEND_API_KEY");
+const FROM_EMAIL = getEnv("RESEND_FROM_EMAIL", "onboarding@resend.dev");
 const ADMIN_EMAIL = getEnv("ADMIN_EMAIL") || "urbandos7@gmail.com"; // Matches .env
+const APP_BASE_URL = getEnv("APP_BASE_URL", "http://localhost:5173");
+const BACKEND_PUBLIC_URL = getEnv("BACKEND_PUBLIC_URL", "http://localhost:5000");
 
-const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: SMTP_PORT,
-  secure: SMTP_PORT === 465, // Port 587 should be secure: false
-  family: 4, // Force IPv4 to avoid ENETUNREACH errors on Render
-  connectionTimeout: 20000,
-  greetingTimeout: 20000,
-  socketTimeout: 20000,
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-  },
-});
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
 const sendEmail = async (mailOptions, retries = 3) => {
+  if (!resend) {
+    const message = "RESEND_API_KEY is missing. Email delivery is disabled.";
+    console.error("[EMAIL CONFIG ERROR]:", message);
+    return { success: false, error: message, code: "MISSING_RESEND_API_KEY", to: mailOptions.to };
+  }
+
   const options = {
     from: `"UrbanDos" <${FROM_EMAIL}>`,
     to: mailOptions.to,
     subject: mailOptions.subject,
     text: mailOptions.text,
     html: mailOptions.html,
-    attachments: mailOptions.attachments || [],
+    attachments: mailOptions.attachments || undefined,
   };
 
   for (let i = 0; i < retries; i++) {
     try {
-      const info = await transporter.sendMail(options);
-      console.log("[EMAIL SUCCESS]:", info.messageId);
-      return { success: true, messageId: info.messageId };
+      const { data, error } = await resend.emails.send(options);
+
+      if (error) {
+        const resendError = new Error(error.message || "Resend email API error");
+        resendError.code = error.name || "RESEND_API_ERROR";
+        throw resendError;
+      }
+
+      const messageId = data?.id || "unknown";
+      console.log("[EMAIL SUCCESS]:", options.to, messageId);
+      return { success: true, messageId, to: options.to };
     } catch (error) {
-      console.error(`[EMAIL ATTEMPT ${i + 1} FAILED]:`, error.code, error.message);
+      console.error(`[EMAIL ATTEMPT ${i + 1} FAILED]:`, options.to, error.code, error.message);
       
       if (i < retries - 1) {
         console.log(`Retrying in 2 seconds...`);
@@ -55,7 +55,7 @@ const sendEmail = async (mailOptions, retries = 3) => {
       }
       
       // On absolute failure, log but don't crash background jobs
-      return { success: false, error: error.message, code: error.code };
+      return { success: false, error: error.message, code: error.code, to: options.to };
     }
   }
 };
@@ -80,7 +80,7 @@ const sendStatusUpdateEmail = async (order, customerEmail, status) => {
         <p>You can track your order history and details in your profile.</p>
         
         <div style="margin: 35px 0; text-align: center;">
-          <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">VIEW ORDER STATUS</a>
+          <a href="${APP_BASE_URL}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">VIEW ORDER STATUS</a>
         </div>
       </div>
       
@@ -90,33 +90,34 @@ const sendStatusUpdateEmail = async (order, customerEmail, status) => {
       </div>
     </div>
   `;
-  await sendEmail({ to: customerEmail, subject: `Order Status Update: #${order.orderId || order._id}`, html: emailBody });
+  return sendEmail({ to: customerEmail, subject: `Order Status Update: #${order.orderId || order._id}`, html: emailBody });
 };
 
 module.exports = {
   verifyEmailConfig: async () => {
-    try { await transporter.verify(); return { ok: true }; }
-    catch (e) { return { ok: false, error: e.message }; }
+    if (!RESEND_API_KEY) {
+      return { ok: false, provider: "resend", error: "RESEND_API_KEY is missing" };
+    }
+
+    if (!FROM_EMAIL) {
+      return { ok: false, provider: "resend", error: "RESEND_FROM_EMAIL is missing" };
+    }
+
+    return { ok: true, provider: "resend", from: FROM_EMAIL };
   },
   sendOrderInitiatedAlert: async (order) => {
-    let attachments = [];
     let screenshotHtml = "";
     if (order.paymentScreenshot) {
-      // Look for upload in two places just in case - the path stored in DB might be relative to uploads or to root
-      // Usually it's /uploads/payments/filename
-      const relativePath = order.paymentScreenshot.startsWith("/") ? order.paymentScreenshot.substring(1) : order.paymentScreenshot;
-      const filePath = path.join(process.cwd(), relativePath);
-      
-      attachments.push({
-        filename: "payment_proof.jpg",
-        path: filePath,
-        cid: "proof"
-      });
+      const normalizedPath = order.paymentScreenshot.startsWith("/")
+        ? order.paymentScreenshot
+        : `/${order.paymentScreenshot}`;
+      const screenshotUrl = `${BACKEND_PUBLIC_URL}${normalizedPath}`;
+
       screenshotHtml = `
         <div style="margin-top:20px; border: 2px dashed #e0e0e0; padding: 15px; border-radius: 8px;">
           <p style="font-weight: bold; color: #d32f2f;">📸 CUSTOMER PAYMENT PROOF:</p>
-          <img src="cid:proof" style="max-width:400px; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.1)"/>
-          <p style="font-size: 11px; color: #888; margin-top: 10px;">File path for debugging: ${filePath}</p>
+          <img src="${screenshotUrl}" style="max-width:400px; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.1)"/>
+          <p style="font-size: 11px; color: #888; margin-top: 10px;">Screenshot URL: ${screenshotUrl}</p>
         </div>
       `;
     }
@@ -144,7 +145,7 @@ module.exports = {
         </div>
       </div>
     `;
-    await sendEmail({ to: ADMIN_EMAIL, subject: `🚨 NEW ORDER: ₹${order.totalAmount} - #${order._id.toString().slice(-6)}`, html, attachments });
+    return sendEmail({ to: ADMIN_EMAIL, subject: `🚨 NEW ORDER: ₹${order.totalAmount} - #${order._id.toString().slice(-6)}`, html });
   },
   sendOrderReceivedEmail: async (order, email) => {
     const html = `
@@ -167,7 +168,7 @@ module.exports = {
           <p>Once our team verifies the payment, you'll receive another update when your gear has been confirmed for processing.</p>
           
           <div style="margin: 35px 0; text-align: center;">
-             <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">TRACK YOUR ORDER</a>
+             <a href="${APP_BASE_URL}/profile" style="background-color: #000; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">TRACK YOUR ORDER</a>
           </div>
 
           <p style="font-style: italic; font-size: 14px; text-align: center; color: #666;">"Style is a way to say who you are without having to speak."</p>
@@ -179,7 +180,7 @@ module.exports = {
         </div>
       </div>
     `;
-    await sendEmail({ to: email, subject: `UrbanDos - Order Received! (#${order._id.toString().slice(-6)})`, html });
+    return sendEmail({ to: email, subject: `UrbanDos - Order Received! (#${order._id.toString().slice(-6)})`, html });
   },
   sendStatusUpdateEmail,
   sendOrderConfirmedEmail: (o) => sendStatusUpdateEmail(o, o.customerDetails.email, "Confirmed"),

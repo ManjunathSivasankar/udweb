@@ -109,8 +109,20 @@ const updateOrderStatus = async (req, res) => {
 
     try {
       if (order.customerDetails && order.customerDetails.email) {
-        await sendStatusUpdateEmail(order, order.customerDetails.email, status);
-        console.log(`[EMAIL] Status update (${status}) sent to:`, order.customerDetails.email);
+        const emailResult = await sendStatusUpdateEmail(
+          order,
+          order.customerDetails.email,
+          status,
+        );
+        if (emailResult && emailResult.success) {
+          console.log(`[EMAIL] Status update (${status}) sent to:`, order.customerDetails.email);
+        } else {
+          console.error(
+            `[EMAIL ERROR] Status update failed for order ${order._id}:`,
+            emailResult?.code || "UNKNOWN",
+            emailResult?.error || "No error details",
+          );
+        }
       }
     } catch (emailErr) {
       console.error(`[EMAIL ERROR] Status update failed for order ${order._id}:`, emailErr.message);
@@ -152,7 +164,18 @@ const cancelOrder = async (req, res) => {
     const { sendStatusUpdateEmail } = require("../services/notificationService");
     try {
       if (order.customerDetails && order.customerDetails.email) {
-        await sendStatusUpdateEmail(order, order.customerDetails.email, "Cancelled");
+        const cancelEmailResult = await sendStatusUpdateEmail(
+          order,
+          order.customerDetails.email,
+          "Cancelled",
+        );
+        if (!cancelEmailResult || !cancelEmailResult.success) {
+          console.error(
+            "[EMAIL ERROR] Cancellation notification failed:",
+            cancelEmailResult?.code || "UNKNOWN",
+            cancelEmailResult?.error || "No error details",
+          );
+        }
       }
     } catch (emailErr) {
       console.error("[EMAIL ERROR] Cancellation notification failed:", emailErr.message);

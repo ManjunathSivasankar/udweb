@@ -125,7 +125,7 @@ app.get("/", (req, res) => res.send("API Regular"));
 const path = require("path");
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// GET /api/health/email  – diagnose SMTP config from production
+// GET /api/health/email  – diagnose email provider config from production
 app.get("/api/health/email", async (req, res) => {
   try {
     const token = req.query.token || req.headers["x-health-token"];
